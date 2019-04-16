@@ -7,7 +7,7 @@
 WHITESPACE = _{ " " }
 COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 
-definition_prefix = { ext }
+definition_prefix = _{ ext }
     ext = {"extern"}
 
 binary_operation = { "+" | "*" | "-" | "/" }
@@ -19,11 +19,18 @@ keywords = {"let" | "in"}
 variable_name = @{ !keywords ~ ident }
 
 function_call = {
-    variable_name+
+    variable_name ~ binary_expression*
+}
+
+monadic_expression = {
+    function_call |
+    variable_name |
+    ("(" ~ monadic_expression ~ ")")
 }
 
 binary_expression = {
-    variable_name ~ binary_operation ~ variable_name
+    monadic_expression ~ (binary_operation ~ expression) |
+    ("(" ~ binary_expression ~ ")")
 }
 
 expression = {
@@ -39,6 +46,6 @@ local_binding = { "let" ~ (binding ~ "\n"? ~ "and")* ~ binding ~ "\n"? ~ "in" }
 
 definition = { definition_prefix* ~ "let" ~ variable_name ~ variable_name* ~ "=" ~ "\n"? ~ local_binding? ~ "\n"? ~ expression }
 
-statement = { definition }
+statement = _{ definition }
 
 program = _{ SOI ~ "\n"* ~ (statement ~ "\n"+)* ~ statement? ~ EOI }
