@@ -1,0 +1,13 @@
+[package]
+name = "plumber"
+version = "0.1.0"
+authors = ["Yang Keao <keao.yang@yahoo.com>"]
+edition = "2018"
+
+[dependencies]
+pest = "2.1.1"
+pest_derive = "2.1.0"
+clap = "2.33.0"
+
+[build-dependencies]
+build-deps = "0.1.3"
