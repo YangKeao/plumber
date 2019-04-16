@@ -8,7 +8,7 @@ use clap::{App, Arg};
 
 #[derive(Parser)]
 #[grammar = "../grammar/plumber.pest"]
-struct PlumberParser;
+struct Plumber;
 
 fn main() {
     let matches = App::new("Plumber")
@@ -16,9 +16,14 @@ fn main() {
         .arg(Arg::with_name("INPUT")
             .required(true)
             .index(1))
+        .arg(Arg::with_name("target")
+            .short("t")
+            .long("target"))
         .get_matches();
 
     let input_file = std::fs::read_to_string(matches.value_of("INPUT").unwrap()).unwrap();
-    let ast = PlumberParser::parse(Rule::program, &input_file).unwrap_or_else(|e| panic!("{}", e));
+    let target = matches.value_of("target").unwrap_or("x86_64-pc-linux-gnu");
+
+    let ast = Plumber::parse(Rule::program, &input_file).unwrap_or_else(|e| panic!("{}", e));
     println!("{:?}", ast);
 }

@@ -10,7 +10,11 @@ COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 definition_prefix = _{ ext }
     ext = {"extern"}
 
-binary_operation = { "+" | "*" | "-" | "/" }
+binary_operation = { plus | mul | minus | div }
+    plus = {"+"}
+    mul = {"*"}
+    minus = {"-"}
+    div = {"/"}
 
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
@@ -18,13 +22,16 @@ keywords = {"let" | "in"}
 
 variable_name = @{ !keywords ~ ident }
 
+const_value = @{ ASCII_DIGIT }
+
 function_call = {
-    variable_name ~ binary_expression*
+    variable_name ~ (monadic_expression | ("(" ~ binary_expression ~ ")"))*
 }
 
 monadic_expression = {
     function_call |
     variable_name |
+    const_value   |
     ("(" ~ monadic_expression ~ ")")
 }
 
@@ -35,7 +42,7 @@ binary_expression = {
 
 expression = {
     binary_expression |
-    function_call
+    monadic_expression
 }
 
 binding = {
@@ -44,8 +51,8 @@ binding = {
 
 local_binding = { "let" ~ (binding ~ "\n"? ~ "and")* ~ binding ~ "\n"? ~ "in" }
 
-definition = { definition_prefix* ~ "let" ~ variable_name ~ variable_name* ~ "=" ~ "\n"? ~ local_binding? ~ "\n"? ~ expression }
+fun_definition = { definition_prefix* ~ "let" ~ variable_name ~ variable_name* ~ "=" ~ "\n"? ~ local_binding? ~ "\n"? ~ expression }
 
-statement = _{ definition }
+statement = _{ fun_definition }
 
 program = _{ SOI ~ "\n"* ~ (statement ~ "\n"+)* ~ statement? ~ EOI }
