@@ -268,6 +268,5 @@ pub fn parse_ast(ast: pest::iterators::Pairs<'_, Rule>) -> Program {
             }
         }
     }
-    dbg!(&program);
     Program(program)
 }
