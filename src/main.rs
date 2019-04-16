@@ -3,12 +3,10 @@ extern crate pest;
 extern crate pest_derive;
 extern crate clap;
 
-use pest::Parser;
-use clap::{App, Arg};
+mod parser;
 
-#[derive(Parser)]
-#[grammar = "../grammar/plumber.pest"]
-struct Plumber;
+use clap::{App, Arg};
+use parser::*;
 
 fn main() {
     let matches = App::new("Plumber")
@@ -24,6 +22,5 @@ fn main() {
     let input_file = std::fs::read_to_string(matches.value_of("INPUT").unwrap()).unwrap();
     let target = matches.value_of("target").unwrap_or("x86_64-pc-linux-gnu");
 
-    let ast = Plumber::parse(Rule::program, &input_file).unwrap_or_else(|e| panic!("{}", e));
-    println!("{:?}", ast);
+    println!("{}", Plumber::compile(&input_file, target));
 }

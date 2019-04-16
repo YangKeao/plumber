@@ -10,7 +10,7 @@ COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 definition_prefix = _{ ext }
     ext = {"extern"}
 
-binary_operation = { plus | mul | minus | div }
+binary_operation = _{ plus | mul | minus | div }
     plus = {"+"}
     mul = {"*"}
     minus = {"-"}
@@ -24,13 +24,13 @@ variable_name = @{ !keywords ~ ident }
 
 const_value = @{ ASCII_DIGIT }
 
+// Don't separate function_call and variable
 function_call = {
     variable_name ~ (monadic_expression | ("(" ~ binary_expression ~ ")"))*
 }
 
 monadic_expression = {
     function_call |
-    variable_name |
     const_value   |
     ("(" ~ monadic_expression ~ ")")
 }
