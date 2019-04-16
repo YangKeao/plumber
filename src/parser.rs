@@ -20,8 +20,10 @@ impl Plumber {
     }
 }
 
+#[derive(Debug)]
 pub struct Variable(String);
 
+#[derive(Debug)]
 pub struct FunDefinition {
     ext: bool,
     name: String,
@@ -92,11 +94,13 @@ impl FunDefinition {
     }
 }
 
+#[derive(Debug)]
 pub struct Binding {
     var: Variable,
     value: Expression
 }
 
+#[derive(Debug)]
 pub enum Expression {
     BinaryExpression(BinaryExpression),
     MonadicExpression(MonadicExpression),
@@ -124,6 +128,7 @@ impl Expression {
     }
 }
 
+#[derive(Debug)]
 pub struct BinaryExpression {
     left: Box<MonadicExpression>,
     right: Box<Expression>,
@@ -154,6 +159,7 @@ impl BinaryExpression {
     }
 }
 
+#[derive(Debug)]
 pub enum BinaryOperation {
     Plus,
     Mul,
@@ -173,6 +179,7 @@ impl BinaryOperation {
     }
 }
 
+#[derive(Debug)]
 pub enum MonadicExpression {
     FunctionCall(FunctionCall),
     Variable(Variable),
@@ -201,6 +208,7 @@ impl MonadicExpression {
     }
 }
 
+#[derive(Debug)]
 pub struct FunctionCall {
     function_name: Variable,
     args: Vec<Expression>
@@ -232,16 +240,18 @@ impl FunctionCall {
             args
         };
         FunctionCall {
-            function_name: Variable(String::from("aha")),
+            function_name,
             args,
         }
     }
 }
 
+#[derive(Debug)]
 pub enum Statement {
     FunDefinition(FunDefinition)
 }
 
+#[derive(Debug)]
 pub struct Program (Vec<Statement>);
 
 pub fn parse_ast(ast: pest::iterators::Pairs<'_, Rule>) -> Program {
@@ -258,5 +268,6 @@ pub fn parse_ast(ast: pest::iterators::Pairs<'_, Rule>) -> Program {
             }
         }
     }
+    dbg!(&program);
     Program(program)
 }
