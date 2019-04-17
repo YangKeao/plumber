@@ -1,17 +1,16 @@
 use pest::{Parser};
 use pest::iterators::Pair;
-use crate::codegen::CodeGen;
-use pest::error::InputLocation::Span;
+use crate::codegen::Compile;
 
 #[derive(Parser)]
 #[grammar = "../grammar/plumber.pest"]
 pub struct Plumber;
 
 impl Plumber {
-    pub fn compile(file: &str, target: &str, module_name: &[u8]) {
+    pub fn compile(file: &str, target: &str, module_name: &str) {
         let ast = Plumber::parse(Rule::program, &file).unwrap_or_else(|e| panic!("{}", e));
         let program = Program::parse(ast);
-        program.codegen(module_name);
+        program.compile(module_name);
     }
 }
 
@@ -20,10 +19,10 @@ pub struct Variable(String);
 
 #[derive(Debug)]
 pub struct FunDefinition {
-    attributes: Vec<Attribute>,
+    pub attributes: Vec<Attribute>,
     ext: bool,
-    name: String,
-    args: Vec<Variable>,
+    pub name: String,
+    pub args: Vec<Variable>,
     bindings: Vec<Binding>,
     expr: Expression
 }
@@ -265,6 +264,9 @@ pub enum Statement {
 pub struct Program (Vec<Statement>);
 
 impl Program {
+    pub fn get_statements(&self) -> &Vec<Statement> {
+        &self.0
+    }
     pub fn parse(program: pest::iterators::Pairs<'_, Rule>) -> Self {
         let mut ret: Vec<Statement> = Vec::new();
 
@@ -284,7 +286,7 @@ impl Program {
 }
 
 #[derive(Debug)]
-enum Attribute {
+pub enum Attribute {
     Split(Split)
 }
 
@@ -307,7 +309,7 @@ impl Attribute {
 }
 
 #[derive(Debug)]
-struct Split {
+pub struct Split {
     var: Variable,
     bound: i64,
     var1: Variable,

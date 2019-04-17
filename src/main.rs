@@ -24,5 +24,5 @@ fn main() {
     let input_file = std::fs::read_to_string(file_name).unwrap();
     let target = matches.value_of("target").unwrap_or("x86_64-pc-linux-gnu");
 
-    Plumber::compile(&input_file, target, file_name.as_bytes());
+    Plumber::compile(&input_file, target, file_name);
 }
