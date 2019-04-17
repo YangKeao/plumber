@@ -17,14 +17,20 @@ impl Plumber {
 #[derive(Debug)]
 pub struct Variable(String);
 
+impl Variable {
+    pub fn get_name(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug)]
 pub struct FunDefinition {
     pub attributes: Vec<Attribute>,
     ext: bool,
     pub name: String,
     pub args: Vec<Variable>,
-    bindings: Vec<Binding>,
-    expr: Expression
+    pub bindings: Vec<Binding>,
+    pub expr: Expression
 }
 
 impl FunDefinition {
@@ -97,8 +103,8 @@ impl FunDefinition {
 
 #[derive(Debug)]
 pub struct Binding {
-    var: Variable,
-    value: Expression
+    pub var: Variable,
+    pub value: Expression
 }
 
 #[derive(Debug)]
@@ -131,9 +137,9 @@ impl Expression {
 
 #[derive(Debug)]
 pub struct BinaryExpression {
-    left: Box<MonadicExpression>,
-    right: Box<Expression>,
-    op: BinaryOperation
+    pub left: Box<MonadicExpression>,
+    pub right: Box<Expression>,
+    pub op: BinaryOperation
 }
 
 impl BinaryExpression {
@@ -219,8 +225,8 @@ impl MonadicExpression {
 
 #[derive(Debug)]
 pub struct FunctionCall {
-    function_name: Variable,
-    args: Vec<Expression>
+    pub function_name: Variable,
+    pub args: Vec<Expression>
 }
 
 impl FunctionCall {
