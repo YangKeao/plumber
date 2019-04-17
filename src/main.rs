@@ -3,8 +3,8 @@ extern crate pest;
 extern crate pest_derive;
 extern crate clap;
 
-mod parser;
 mod codegen;
+mod parser;
 
 use clap::{App, Arg};
 use parser::*;
@@ -12,12 +12,8 @@ use parser::*;
 fn main() {
     let matches = App::new("Plumber")
         .author("YangKeao <keao.yang@yahoo.com>")
-        .arg(Arg::with_name("INPUT")
-            .required(true)
-            .index(1))
-        .arg(Arg::with_name("target")
-            .short("t")
-            .long("target"))
+        .arg(Arg::with_name("INPUT").required(true).index(1))
+        .arg(Arg::with_name("target").short("t").long("target"))
         .get_matches();
 
     let file_name = matches.value_of("INPUT").unwrap();
