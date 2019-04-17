@@ -1,9 +1,6 @@
 extern crate llvm_sys as llvm;
 
-use self::llvm::core::{
-    LLVMAddTargetDependentFunctionAttr, LLVMBuildAdd, LLVMBuildCall, LLVMBuildMul, LLVMBuildSub,
-    LLVMConstInt, LLVMGetNamedFunction, LLVMGetParam,
-};
+use self::llvm::core::{LLVMAddTargetDependentFunctionAttr, LLVMBuildAdd, LLVMBuildCall, LLVMBuildMul, LLVMBuildSub, LLVMConstInt, LLVMGetNamedFunction, LLVMGetParam, LLVMBuildSDiv};
 use self::llvm::execution_engine::LLVMRecompileAndRelinkFunction;
 use self::llvm::prelude::LLVMValueRef;
 use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMValue};
@@ -79,7 +76,9 @@ impl IrGen for BinaryExpression {
             BinaryOperation::Mul => Some(unsafe {
                 LLVMBuildMul(builder, left, right, b"multmp\0".as_ptr() as *const _)
             }),
-            _ => unimplemented!(),
+            BinaryOperation::Div => Some(unsafe {
+                LLVMBuildSDiv(builder, left, right, b"multmp\0".as_ptr() as *const _)
+            })
         }
     }
 }
