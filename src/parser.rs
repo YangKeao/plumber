@@ -8,11 +8,10 @@ use pest::error::InputLocation::Span;
 pub struct Plumber;
 
 impl Plumber {
-    pub fn compile(file: &str, target: &str) {
+    pub fn compile(file: &str, target: &str, module_name: &[u8]) {
         let ast = Plumber::parse(Rule::program, &file).unwrap_or_else(|e| panic!("{}", e));
         let program = Program::parse(ast);
-        dbg!(&program);
-        program.codegen();
+        program.codegen(module_name);
     }
 }
 
