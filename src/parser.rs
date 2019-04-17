@@ -1,22 +1,18 @@
 use pest::{Parser};
 use pest::iterators::Pair;
+use crate::codegen::CodeGen;
+use pest::error::InputLocation::Span;
 
 #[derive(Parser)]
 #[grammar = "../grammar/plumber.pest"]
 pub struct Plumber;
 
 impl Plumber {
-    pub fn compile(file: &str, target: &str) -> String {
-        let mut ret = String::new();
-        {
-            ret.push_str("target triple = \"");
-            ret.push_str(target);
-            ret.push_str("\"")
-        }
-
+    pub fn compile(file: &str, target: &str) {
         let ast = Plumber::parse(Rule::program, &file).unwrap_or_else(|e| panic!("{}", e));
-        let program = parse_ast(ast);
-        ret
+        let program = Program::parse(ast);
+        dbg!(&program);
+        program.codegen();
     }
 }
 
@@ -25,6 +21,7 @@ pub struct Variable(String);
 
 #[derive(Debug)]
 pub struct FunDefinition {
+    attributes: Vec<Attribute>,
     ext: bool,
     name: String,
     args: Vec<Variable>,
@@ -38,6 +35,11 @@ impl FunDefinition {
             unreachable!()
         }
         let mut vec: Vec<Pair<'_, Rule>> = fun_definition.into_inner().collect();
+        let mut attributes = Vec::new();
+        while vec[0].as_rule() == Rule::attribute {
+            let attribute = vec.remove(0);
+            attributes.push(Attribute::parse(attribute));
+        }
         let ext = {
             if vec[0].as_rule() == Rule::ext {
                 vec.remove(0);
@@ -85,6 +87,7 @@ impl FunDefinition {
 
         let expr = Expression::parse(vec.remove(0));
         FunDefinition {
+            attributes,
             ext,
             name: fun_name,
             args,
@@ -144,16 +147,20 @@ impl BinaryExpression {
         let mut vec: Vec<Pair<'_, Rule>> = binary_expression.into_inner().collect();
         let first = vec.remove(0);
         let first_rule = first.as_rule();
-        if first_rule == Rule::binary_expression {
-            BinaryExpression::parse(first)
-        } else {
-            let left = first;
-            let op = vec.remove(0);
-            let right = vec.remove(0);
-            BinaryExpression {
-                left: Box::new(MonadicExpression::parse(left)),
-                op: BinaryOperation::parse(op),
-                right: Box::new(Expression::parse(right)),
+        match first.as_rule() {
+            Rule::binary_expression => BinaryExpression::parse(first),
+            Rule::monadic_expression => {
+                let left = first;
+                let op = vec.remove(0);
+                let right = vec.remove(0);
+                BinaryExpression {
+                    left: Box::new(MonadicExpression::parse(left)),
+                    op: BinaryOperation::parse(op),
+                    right: Box::new(Expression::parse(right)),
+                }
+            }
+            _ => {
+                unreachable!()
             }
         }
     }
@@ -192,8 +199,7 @@ impl MonadicExpression {
             unreachable!()
         }
         let mut pair = monadic_expression.into_inner().collect::<Vec<Pair<'_, Rule>>>().remove(0);
-        let rule = pair.as_rule();
-        match rule {
+        match pair.as_rule() {
             Rule::function_call => {
                 MonadicExpression::FunctionCall(FunctionCall::parse(pair))
             }
@@ -203,7 +209,12 @@ impl MonadicExpression {
             Rule::const_value => {
                 MonadicExpression::Const(pair.as_str().parse::<i64>().unwrap())
             }
-            _ => unreachable!()
+            Rule::monadic_expression => {
+                MonadicExpression::parse(pair)
+            }
+            _ => {
+                unreachable!()
+            }
         }
     }
 }
@@ -254,19 +265,67 @@ pub enum Statement {
 #[derive(Debug)]
 pub struct Program (Vec<Statement>);
 
-pub fn parse_ast(ast: pest::iterators::Pairs<'_, Rule>) -> Program {
-    let mut program = Vec::new();
+impl Program {
+    pub fn parse(program: pest::iterators::Pairs<'_, Rule>) -> Self {
+        let mut ret: Vec<Statement> = Vec::new();
 
-    for pair in ast.into_iter() {
-        match pair.as_rule() {
-            Rule::fun_definition => {
-                program.push(Statement::FunDefinition(FunDefinition::parse(pair)));
+        for pair in program.into_iter() {
+            match pair.as_rule() {
+                Rule::fun_definition => {
+                    ret.push(Statement::FunDefinition(FunDefinition::parse(pair)));
+                }
+                Rule::EOI => {}
+                _ => {
+                    panic!("Unexpected Rule")
+                }
             }
-            Rule::EOI => {}
+        }
+        Program(ret)
+    }
+}
+
+#[derive(Debug)]
+enum Attribute {
+    Split(Split)
+}
+
+impl Attribute {
+    fn parse(attribute: Pair<'_, Rule>) -> Self {
+        if attribute.as_rule() != Rule::attribute {
+            unreachable!()
+        }
+        let mut vec: Vec<Pair<'_, Rule>> = attribute.into_inner().into_iter().collect();
+        let schedule = vec.remove(0);
+        match schedule.as_rule() {
+            Rule::split => {
+                Attribute::Split(Split::parse(schedule))
+            }
             _ => {
-                panic!("Unexpected Rule")
+                unreachable!()
             }
         }
     }
-    Program(program)
+}
+
+#[derive(Debug)]
+struct Split {
+    var: Variable,
+    bound: i64,
+    var1: Variable,
+    var2: Variable,
+}
+
+impl Split {
+    fn parse(split: Pair<'_, Rule>) -> Self {
+        if split.as_rule() != Rule::split {
+            unreachable!()
+        }
+        let mut vec: Vec<Pair<'_, Rule>> = split.into_inner().into_iter().collect();
+        Split {
+            var: Variable(String::from(vec.remove(0).as_str())),
+            bound: vec.remove(0).as_str().parse().unwrap(),
+            var1: Variable(String::from(vec.remove(0).as_str())),
+            var2: Variable(String::from(vec.remove(0).as_str())),
+        }
+    }
 }

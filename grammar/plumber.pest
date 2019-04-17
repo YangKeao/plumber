@@ -5,7 +5,7 @@
 //
 
 WHITESPACE = _{ " " }
-COMMENT = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+COMMENT = _{ "//" ~ (!"\n" ~ ANY)*}
 
 definition_prefix = _{ ext }
     ext = {"extern"}
@@ -51,7 +51,17 @@ binding = {
 
 local_binding = { "let" ~ (binding ~ "\n"? ~ "and")* ~ binding ~ "\n"? ~ "in" }
 
-fun_definition = { definition_prefix* ~ "let" ~ variable_name ~ variable_name* ~ "=" ~ "\n"? ~ local_binding? ~ "\n"? ~ expression }
+split = { "split" ~ variable_name ~ const_value ~ variable_name ~ variable_name }
+
+schedule = _{split}
+
+attribute = { "@" ~ schedule ~ "\n"}
+
+fun_definition = {
+    attribute* ~
+    definition_prefix* ~ "let" ~ variable_name ~ variable_name* ~ "=" ~ "\n"? ~
+        local_binding? ~ "\n"? ~ expression
+}
 
 statement = _{ fun_definition }
 

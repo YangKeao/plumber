@@ -4,6 +4,7 @@ extern crate pest_derive;
 extern crate clap;
 
 mod parser;
+mod codegen;
 
 use clap::{App, Arg};
 use parser::*;
@@ -22,5 +23,5 @@ fn main() {
     let input_file = std::fs::read_to_string(matches.value_of("INPUT").unwrap()).unwrap();
     let target = matches.value_of("target").unwrap_or("x86_64-pc-linux-gnu");
 
-    println!("{}", Plumber::compile(&input_file, target));
+    Plumber::compile(&input_file, target);
 }
