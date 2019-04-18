@@ -77,8 +77,9 @@ impl Typ {
 #[derive(Debug)]
 pub struct FunDefinition {
     pub attributes: Vec<Attribute>,
-    ext: bool,
+    pub ext: bool,
     pub name: String,
+    pub typ: Typ,
     pub args: Vec<VariableDefine>,
     pub bindings: Vec<Binding>,
     pub expr: Expression,
@@ -89,7 +90,6 @@ impl FunDefinition {
         if fun_definition.as_rule() != Rule::fun_definition {
             unreachable!()
         }
-        dbg!(&fun_definition);
         let mut vec: Vec<Pair<'_, Rule>> = fun_definition.into_inner().collect();
         let mut attributes = Vec::new();
         while vec[0].as_rule() == Rule::attribute {
@@ -133,11 +133,14 @@ impl FunDefinition {
             bindings
         };
 
+        let typ = Typ::parse(vec.remove(0));
+
         let expr = Expression::parse(vec.remove(0));
         FunDefinition {
             attributes,
             ext,
             name: fun_name,
+            typ,
             args,
             bindings,
             expr,

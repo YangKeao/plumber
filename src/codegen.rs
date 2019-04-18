@@ -172,9 +172,11 @@ impl IrGen for FunDefinition {
                 let value = LLVMBuildIntCast(builder, value, bind.var.typ.build_typ(ctx, module, builder).unwrap(), b"tmpcast\0".as_ptr() as *const _);
                 bind_map.insert(&bind.var.name[..], value);
             });
+            let ret_value = self.expr.build(ctx, module, builder, &bind_map).unwrap();
+            let ret_value = LLVMBuildIntCast(builder, ret_value, self.typ.build_typ(ctx, module, builder).unwrap(), b"tmpcast\0".as_ptr() as *const _);
             llvm::core::LLVMBuildRet(
                 builder,
-                self.expr.build(ctx, module, builder, &bind_map).unwrap(),
+                ret_value,
             );
         }
         None

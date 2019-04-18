@@ -77,7 +77,7 @@ struct_definition = { "struct" ~ struct_name ~ "{" ~ "\n"? ~ (variable_define ~ 
 
 fun_definition = {
     attribute* ~
-    definition_prefix* ~ "let" ~ variable_name ~ variable_define* ~ "=" ~ "\n"? ~
+    definition_prefix* ~ "let" ~ variable_name ~ variable_define* ~ "->" ~ type_name ~ "=" ~ "\n"? ~
         local_binding? ~ "\n"? ~ expression
 }
 
