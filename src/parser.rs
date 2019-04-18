@@ -24,11 +24,62 @@ impl Variable {
 }
 
 #[derive(Debug)]
+pub struct VariableDefine {
+    pub name: String,
+    pub typ: Typ
+}
+
+impl VariableDefine {
+    pub fn parse(var_definition: Pair<'_, Rule>) -> Self {
+        if var_definition.as_rule() != Rule::variable_define {
+            unreachable!()
+        }
+        let mut vec: Vec<Pair<'_, Rule>> = var_definition.into_inner().into_iter().collect();
+        VariableDefine {
+            name: String::from(vec.remove(0).as_str()),
+            typ: Typ::parse(vec.remove(0))
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Struct(String);
+
+impl Struct {
+    pub fn get_name(&self) -> &str {
+        &self.0
+    }
+}
+
+#[derive(Debug)]
+pub enum Typ {
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    Struct(Struct)
+}
+
+impl Typ {
+    pub fn parse(typ: Pair<'_, Rule>) -> Self {
+        if typ.as_rule() != Rule::type_name {
+            unreachable!()
+        }
+        dbg!(&typ);
+        Typ::I8
+    }
+}
+
+#[derive(Debug)]
 pub struct FunDefinition {
     pub attributes: Vec<Attribute>,
     ext: bool,
     pub name: String,
-    pub args: Vec<Variable>,
+    pub args: Vec<VariableDefine>,
     pub bindings: Vec<Binding>,
     pub expr: Expression,
 }
@@ -38,6 +89,7 @@ impl FunDefinition {
         if fun_definition.as_rule() != Rule::fun_definition {
             unreachable!()
         }
+        dbg!(&fun_definition);
         let mut vec: Vec<Pair<'_, Rule>> = fun_definition.into_inner().collect();
         let mut attributes = Vec::new();
         while vec[0].as_rule() == Rule::attribute {
@@ -57,16 +109,10 @@ impl FunDefinition {
 
         let args = {
             let mut args = Vec::new();
-            let mut max_arg_index = 0;
-            for (index, arg) in vec.iter().enumerate() {
-                if arg.as_rule() == Rule::variable_name {
-                    args.push(Variable(String::from(arg.as_str())));
-                } else {
-                    max_arg_index = index;
-                    break;
-                }
+            while vec[0].as_rule() == Rule::variable_define {
+                let arg = vec.remove(0);
+                args.push(VariableDefine::parse(arg));
             }
-            vec.drain(0..max_arg_index);
             args
         };
 
@@ -78,9 +124,8 @@ impl FunDefinition {
                 for local_binding in local_binding {
                     let mut bind: Vec<Pair<'_, Rule>> =
                         local_binding.into_inner().into_iter().collect();
-                    let name = bind.remove(0);
                     bindings.push(Binding {
-                        var: Variable(String::from(name.as_str())),
+                        var: VariableDefine::parse(bind.remove(0)),
                         value: Expression::parse(bind.remove(0)),
                     })
                 }
@@ -102,7 +147,7 @@ impl FunDefinition {
 
 #[derive(Debug)]
 pub struct Binding {
-    pub var: Variable,
+    pub var: VariableDefine,
     pub value: Expression,
 }
 
@@ -269,8 +314,11 @@ impl Program {
                 Rule::fun_definition => {
                     ret.push(Statement::FunDefinition(FunDefinition::parse(pair)));
                 }
+                Rule::struct_definition => {
+                    unimplemented!()
+                }
                 Rule::EOI => {}
-                _ => panic!("Unexpected Rule"),
+                _ => unreachable!(),
             }
         }
         Program(ret)

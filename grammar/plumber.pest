@@ -22,6 +22,22 @@ keywords = {"let" | "in"}
 
 variable_name = @{ !keywords ~ ident }
 
+primitive_type = _{ i8 | i16 | i32 | i64 | u8 | u16 | u32 | u64 }
+    i8 = {"i8"}
+    i16 = {"i16"}
+    i32 = {"i32"}
+    i64 = {"i64"}
+    u8 = {"u8"}
+    u16 = {"u16"}
+    u32 = {"u32"}
+    u64 = {"u64"}
+
+type_name = {primitive_type | struct_name}
+
+struct_name = {variable_name}
+
+variable_define = { variable_name ~ ":" ~ type_name }
+
 const_value = @{ ASCII_DIGIT }
 
 function_call = {
@@ -46,7 +62,7 @@ expression = {
 }
 
 binding = {
-    variable_name ~ "=" ~ expression
+    variable_define ~ "=" ~ expression
 }
 
 local_binding = { "let" ~ (binding ~ "\n"? ~ "and")* ~ binding ~ "\n"? ~ "in" }
@@ -57,12 +73,14 @@ schedule = _{split}
 
 attribute = { "@" ~ schedule ~ "\n"}
 
+struct_definition = { "struct" ~ struct_name ~ "{" ~ "\n"? ~ (variable_define ~ "," ~ "\n"?)+ ~ "\n"? ~ "}"}
+
 fun_definition = {
     attribute* ~
-    definition_prefix* ~ "let" ~ variable_name ~ variable_name* ~ "=" ~ "\n"? ~
+    definition_prefix* ~ "let" ~ variable_name ~ variable_define* ~ "=" ~ "\n"? ~
         local_binding? ~ "\n"? ~ expression
 }
 
-statement = _{ fun_definition }
+statement = _{ fun_definition | struct_definition }
 
 program = _{ SOI ~ "\n"* ~ (statement ~ "\n"+)* ~ statement? ~ EOI }

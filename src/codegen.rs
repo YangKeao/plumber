@@ -2,7 +2,7 @@ extern crate llvm_sys as llvm;
 
 use self::llvm::core::*;
 use self::llvm::execution_engine::*;
-use self::llvm::prelude::LLVMValueRef;
+use self::llvm::prelude::{LLVMValueRef, LLVMTypeRef};
 use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMValue};
 use crate::parser::*;
 use std::collections::HashMap;
@@ -16,7 +16,39 @@ pub trait IrGen {
         module: *mut LLVMModule,
         builder: *mut LLVMBuilder,
         value_map: &HashMap<&str, LLVMValueRef>,
-    ) -> Option<LLVMValueRef>;
+    ) -> Option<LLVMValueRef> {
+        unimplemented!()
+    }
+
+    fn build_typ(
+        &self,
+        ctx: *mut LLVMContext,
+        module: *mut LLVMModule,
+        builder: *mut LLVMBuilder
+    ) -> Option<LLVMTypeRef> {
+        unimplemented!()
+    }
+}
+
+impl IrGen for Typ {
+    fn build_typ(
+        &self,
+        ctx: *mut LLVMContext,
+        module: *mut LLVMModule,
+        builder: *mut LLVMBuilder
+    ) -> Option<LLVMTypeRef> {
+        match self {
+            Typ::I8 => Some(unsafe {LLVMInt8TypeInContext(ctx)}),
+            Typ::I16 => Some(unsafe {LLVMInt16TypeInContext(ctx)}),
+            Typ::I32 => Some(unsafe {LLVMInt32TypeInContext(ctx)}),
+            Typ::I64 => Some(unsafe {LLVMInt64TypeInContext(ctx)}),
+            Typ::U8 => Some(unsafe {LLVMInt8TypeInContext(ctx)}),
+            Typ::U16 => Some(unsafe {LLVMInt16TypeInContext(ctx)}),
+            Typ::U32 => Some(unsafe {LLVMInt32TypeInContext(ctx)}),
+            Typ::U64 => Some(unsafe {LLVMInt64TypeInContext(ctx)}),
+            Typ::Struct(st) => Some(unsafe {LLVMGetTypeByName(module, format!("{}\0", st.get_name()).as_ptr() as *const _)})
+        }
+    }
 }
 
 impl IrGen for MonadicExpression {
@@ -133,12 +165,12 @@ impl IrGen for FunDefinition {
 
             let mut bind_map = HashMap::new(); // TODO: Join the HashMap in args
             for (index, var) in self.args.iter().enumerate() {
-                bind_map.insert(var.get_name(), LLVMGetParam(function, index as u32));
+                bind_map.insert(&var.name[..], LLVMGetParam(function, index as u32));
             }
             self.bindings.iter().for_each(|bind| {
-                let name = bind.var.get_name();
                 let value = bind.value.build(ctx, module, builder, &bind_map).unwrap();
-                bind_map.insert(name, value);
+                let value = LLVMBuildIntCast(builder, value, bind.var.typ.build_typ(ctx, module, builder).unwrap(), b"tmpcast\0".as_ptr() as *const _);
+                bind_map.insert(&bind.var.name[..], value);
             });
             llvm::core::LLVMBuildRet(
                 builder,
