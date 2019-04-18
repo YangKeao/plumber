@@ -30,6 +30,20 @@ pub trait IrGen {
     }
 }
 
+impl IrGen for StructDefinition {
+    fn build_typ(
+        &self,
+        ctx: *mut LLVMContext,
+        module: *mut LLVMModule,
+        builder: *mut LLVMBuilder,
+    ) -> Option<LLVMTypeRef> {
+        let mut fields: Vec<LLVMTypeRef> = self.fields.iter().map(|field| {
+            field.build_typ(ctx, module, builder).unwrap()
+        }).collect();
+        Some(unsafe {LLVMStructTypeInContext(ctx, fields.as_mut_ptr(), fields.len() as u32, 0)})
+    }
+}
+
 impl IrGen for Typ {
     fn build_typ(
         &self,
@@ -193,6 +207,7 @@ impl IrGen for Statement {
     ) -> Option<LLVMValueRef> {
         match self {
             Statement::FunDefinition(fun_def) => fun_def.build(ctx, module, builder, value_map),
+            Statement::StructDefinition(struct_def) => struct_def.build(ctx, module, builder, value_map),
         }
     }
 }

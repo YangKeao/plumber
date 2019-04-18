@@ -73,7 +73,7 @@ schedule = _{split}
 
 attribute = { "@" ~ schedule ~ "\n"}
 
-struct_definition = { "struct" ~ struct_name ~ "{" ~ "\n"? ~ (variable_define ~ "," ~ "\n"?)+ ~ "\n"? ~ "}"}
+struct_definition = { "struct" ~ struct_name ~ "(" ~ (type_name ~ "," ~ "\n"?)* ~ type_name ~ "\n"? ~ ")"}
 
 fun_definition = {
     attribute* ~

@@ -1,6 +1,7 @@
 use crate::codegen::Compile;
 use pest::iterators::Pair;
 use pest::Parser;
+use std::io::SeekFrom::Start;
 
 #[derive(Parser)]
 #[grammar = "../grammar/plumber.pest"]
@@ -69,8 +70,17 @@ impl Typ {
         if typ.as_rule() != Rule::type_name {
             unreachable!()
         }
-        dbg!(&typ);
-        Typ::I8
+        match typ.as_str() {
+            "i8" => Typ::I8,
+            "i16" => Typ::I16,
+            "i32" => Typ::I32,
+            "i64" => Typ::I64,
+            "u8" => Typ::U8,
+            "u16" => Typ::U16,
+            "u32" => Typ::U32,
+            "u64" => Typ::U64,
+            _ => Typ::Struct(Struct(String::from(typ.as_str())))
+        }
     }
 }
 
@@ -175,6 +185,7 @@ impl Expression {
                 _ => unreachable!(),
             }
         } else {
+            dbg!(expr);
             unreachable!()
         }
     }
@@ -300,6 +311,35 @@ impl FunctionCall {
 #[derive(Debug)]
 pub enum Statement {
     FunDefinition(FunDefinition),
+    StructDefinition(StructDefinition),
+}
+
+#[derive(Debug)]
+pub struct StructDefinition {
+    pub name: Struct,
+    pub fields: Vec<Typ>,
+}
+
+impl StructDefinition {
+    pub fn parse(struct_def: Pair<'_, Rule>) -> Self {
+        if struct_def.as_rule() != Rule::struct_definition {
+            unreachable!()
+        }
+        let mut inner: Vec<Pair<'_, Rule>> = struct_def.into_inner().into_iter().collect();
+
+        let name = Struct(String::from(inner.remove(0).as_str()));
+        let fields = {
+            let mut fields = Vec::new();
+            while inner.len() > 0 {
+                fields.push(Typ::parse(inner.remove(0)))
+            }
+            fields
+        };
+        Self {
+            name,
+            fields,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -318,7 +358,7 @@ impl Program {
                     ret.push(Statement::FunDefinition(FunDefinition::parse(pair)));
                 }
                 Rule::struct_definition => {
-                    unimplemented!()
+                    ret.push(Statement::StructDefinition(StructDefinition::parse(pair)))
                 }
                 Rule::EOI => {}
                 _ => unreachable!(),
