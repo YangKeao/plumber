@@ -9,15 +9,11 @@ use self::llvm::transforms::scalar::*;
 use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMPassManager};
 
 use crate::parser::*;
+use crate::llvm_macro::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-macro_rules! into_raw_str {
-    ($x: expr) => (
-        format!("{}\0", $x).as_ptr() as *const _
-    )
-}
+use std::ops::Deref;
 
 #[derive(Clone)]
 pub struct CompileContext {
@@ -29,10 +25,79 @@ pub struct CompileContext {
     pub typ_map: Arc<RefCell<HashMap<String, LLVMTypeRef>>>,
 }
 
-pub trait IrGen {
-    fn build(&self, _ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
-        unimplemented!()
+impl CompileContext {
+    fn new(name: &str) -> CompileContext {
+        unsafe {
+            let ctx = LLVMContextCreate();
+            let builder = LLVMCreateBuilderInContext(ctx);
+            let module =
+                LLVMModuleCreateWithNameInContext(into_raw_str!(name), ctx);
+
+            let fpm = LLVMCreateFunctionPassManagerForModule(module);
+            LLVMAddInstructionCombiningPass(fpm);
+            LLVMAddReassociatePass(fpm);
+            LLVMAddGVNPass(fpm);
+            LLVMAddCFGSimplificationPass(fpm);
+            LLVMInitializeFunctionPassManager(fpm); // TODO: Add more OPT pass
+
+            let typ_map = Arc::new(RefCell::new(HashMap::new()));
+            CompileContext {
+                llvm_ctx: ctx,
+                module,
+                fpm,
+                builder,
+                value_map: Arc::new(RefCell::new(HashMap::new())),
+                typ_map: typ_map.clone(),
+            }
+        }
     }
+    fn print(&self) {
+        unsafe {
+            LLVMDumpModule(self.module);
+        }
+    }
+    fn drop(self) {
+        unsafe {
+            LLVMDisposeBuilder(self.builder);
+            LLVMContextDispose(self.llvm_ctx);
+        }
+    }
+}
+
+pub struct JITEngine<'a> {
+    ctx: &'a CompileContext,
+    engine: LLVMExecutionEngineRef
+}
+
+impl<'a> JITEngine<'a> {
+    fn new(ctx: &CompileContext) -> JITEngine {
+        let engine = unsafe {
+            LLVMLinkInMCJIT();
+            LLVM_InitializeNativeTarget();
+            LLVM_InitializeNativeAsmPrinter();
+
+            let mut execution_engine = std::mem::uninitialized();
+            let mut out = std::mem::zeroed();
+            LLVMCreateExecutionEngineForModule(&mut execution_engine, ctx.module, &mut out);
+            execution_engine
+        };
+        JITEngine {
+            ctx,
+            engine,
+        }
+    }
+    fn get_func(&self, name: &str) -> u64 {
+        unsafe {LLVMGetFunctionAddress(self.engine, into_raw_str!(name))}
+    }
+    fn drop(self) {
+        unsafe {
+            LLVMDisposeExecutionEngine(self.engine);
+        }
+    }
+}
+
+pub trait IrGen {
+    fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)>;
 }
 
 impl IrGen for StructDefinition {
@@ -55,33 +120,17 @@ impl IrGen for StructDefinition {
 impl IrGen for Typ {
     fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
         match self {
-            Typ::I8 => Some((std::ptr::null_mut(), unsafe {
-                LLVMInt8TypeInContext(ctx.llvm_ctx)
-            })),
-            Typ::I16 => Some((std::ptr::null_mut(), unsafe {
-                LLVMInt16TypeInContext(ctx.llvm_ctx)
-            })),
-            Typ::I32 => Some((std::ptr::null_mut(), unsafe {
-                LLVMInt32TypeInContext(ctx.llvm_ctx)
-            })),
-            Typ::I64 => Some((std::ptr::null_mut(), unsafe {
-                LLVMInt64TypeInContext(ctx.llvm_ctx)
-            })),
-            Typ::U8 => Some((std::ptr::null_mut(), unsafe {
-                LLVMInt8TypeInContext(ctx.llvm_ctx)
-            })),
-            Typ::U16 => Some((std::ptr::null_mut(), unsafe {
-                LLVMInt16TypeInContext(ctx.llvm_ctx)
-            })),
-            Typ::U32 => Some((std::ptr::null_mut(), unsafe {
-                LLVMInt32TypeInContext(ctx.llvm_ctx)
-            })),
-            Typ::U64 => Some((std::ptr::null_mut(), unsafe {
-                LLVMInt64TypeInContext(ctx.llvm_ctx)
-            })),
+            Typ::I8 => Some((std::ptr::null_mut(), llvm_i8!(ctx))),
+            Typ::I16 => Some((std::ptr::null_mut(), llvm_i16!(ctx))),
+            Typ::I32 => Some((std::ptr::null_mut(), llvm_i32!(ctx))),
+            Typ::I64 => Some((std::ptr::null_mut(), llvm_i64!(ctx))),
+            Typ::U8 => Some((std::ptr::null_mut(), llvm_i8!(ctx))),
+            Typ::U16 => Some((std::ptr::null_mut(), llvm_i16!(ctx))),
+            Typ::U32 => Some((std::ptr::null_mut(), llvm_i32!(ctx))),
+            Typ::U64 => Some((std::ptr::null_mut(), llvm_i64!(ctx))),
             Typ::Struct(st) => Some((std::ptr::null_mut(),
                 *ctx.typ_map
-                    .borrow()
+                    .borrow_mut()
                     .get(&st.get_name().to_string())
                     .unwrap()
             )),
@@ -91,7 +140,6 @@ impl IrGen for Typ {
 
 impl IrGen for MonadicExpression {
     fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
-        let int = unsafe { llvm::core::LLVMInt64TypeInContext(ctx.llvm_ctx) };
         match self {
             MonadicExpression::FunctionCall(fun_call) => {
                 let function = unsafe {
@@ -102,7 +150,7 @@ impl IrGen for MonadicExpression {
                 };
                 let function_typ = *ctx
                     .typ_map
-                    .borrow()
+                    .borrow_mut()
                     .get(&fun_call.function_name.get_name().to_string())
                     .unwrap();
 
@@ -115,15 +163,8 @@ impl IrGen for MonadicExpression {
                     .iter()
                     .enumerate()
                     .map(|(index, item)| {
-                        let expr = item.build(ctx).unwrap().0;
-                        unsafe {
-                            LLVMBuildIntCast(
-                                ctx.builder,
-                                expr,
-                                params[index],
-                                into_raw_str!("tmpcast"),
-                            )
-                        }
+                        let expr = evaluate_value::<Expression, _>(ctx, item);
+                        llvm_cast_int(ctx, expr, params[index])
                     })
                     .collect();
                 Some((
@@ -140,7 +181,7 @@ impl IrGen for MonadicExpression {
                     unsafe {
                         LLVMGetReturnType(
                             *ctx.typ_map
-                                .borrow()
+                                .borrow_mut()
                                 .get(fun_call.function_name.get_name())
                                 .unwrap(),
                         )
@@ -148,20 +189,18 @@ impl IrGen for MonadicExpression {
                 ))
             }
             MonadicExpression::Variable(var) => Some((
-                *ctx.value_map.borrow().get(var.get_name()).unwrap(),
+                *ctx.value_map.borrow_mut().get(var.get_name()).unwrap(),
                 std::ptr::null_mut(),
             )), // TODO: Add Type for value
             MonadicExpression::Const(num) => Some((
-                unsafe { LLVMConstInt(int, *num as u64, 0) },
+                unsafe { LLVMConstInt(llvm_i64!(ctx), *num as u64, 0) },
                 Typ::I64.build(ctx).unwrap().1,
             )),
             MonadicExpression::TypeCast(type_cast) => {
-                let value = type_cast.inner.build(ctx).unwrap().0;
-                let typ = type_cast.typ.build(ctx).unwrap().1;
+                let value = evaluate_value(ctx, &type_cast.inner);
+                let typ = evaluate_type(ctx, &type_cast.typ);
                 Some((
-                    unsafe {
-                        LLVMBuildIntCast(ctx.builder, value, typ, into_raw_str!("tmpcast"))
-                    },
+                    llvm_cast_int(ctx, value, typ),
                     typ,
                 ))
             }
@@ -171,25 +210,23 @@ impl IrGen for MonadicExpression {
 
 impl IrGen for BinaryExpression {
     fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
-        let left = self.left.build(ctx).unwrap().0;
-        let right = self.right.build(ctx).unwrap().0; // TODO: cast type for binary operator
+        let left = evaluate_value(ctx, &self.left);
+        let right = evaluate_value(ctx, &self.right); // TODO: cast type for binary operator
         match self.op {
             BinaryOperation::Plus => Some((
-                unsafe { LLVMBuildAdd(ctx.builder, left, right, into_raw_str!("addtmp")) },
+                llvm_add(ctx, left, right),
                 std::ptr::null_mut(),
             )),
             BinaryOperation::Minus => Some((
-                unsafe { LLVMBuildSub(ctx.builder, left, right, into_raw_str!("minustmp")) },
+                llvm_sub(ctx, left, right),
                 std::ptr::null_mut(),
             )),
             BinaryOperation::Mul => Some((
-                unsafe { LLVMBuildMul(ctx.builder, left, right, into_raw_str!("multmp")) },
+                llvm_mul(ctx, left, right),
                 std::ptr::null_mut(),
             )),
             BinaryOperation::Div => Some((
-                unsafe {
-                    LLVMBuildSDiv(ctx.builder, left, right, into_raw_str!("divtmp"))
-                },
+                llvm_div(ctx, left, right),
                 std::ptr::null_mut(),
             )),
         }
@@ -248,23 +285,13 @@ impl IrGen for FunDefinition {
             ctx.value_map = Arc::new(RefCell::new(bind_map));
             self.bindings.iter().for_each(|bind| {
                 let value = bind.value.build(&ctx).unwrap().0;
-                let value = LLVMBuildIntCast(
-                    ctx.builder,
-                    value,
-                    bind.var.typ.build(&ctx).unwrap().1,
-                    into_raw_str!("tmpcast"),
-                );
+                let value = llvm_cast_int(&ctx, value, bind.var.typ.build(&ctx).unwrap().1);
                 ctx.value_map
                     .borrow_mut()
                     .insert(bind.var.name.clone(), value);
             });
             let ret_value = self.expr.build(&ctx).unwrap().0;
-            let ret_value = LLVMBuildIntCast(
-                ctx.builder,
-                ret_value,
-                ret_typ,
-                into_raw_str!("tmpcast"),
-            );
+            let ret_value = llvm_cast_int(&ctx, ret_value, ret_typ);
             llvm::core::LLVMBuildRet(ctx.builder, ret_value);
 
             LLVMRunFunctionPassManager(ctx.fpm, function);
@@ -293,55 +320,30 @@ pub trait Compile {
 impl Compile for Program {
     fn compile(&self, name: &str) {
         unsafe {
-            let ctx = LLVMContextCreate();
-            let builder = LLVMCreateBuilderInContext(ctx);
-            let module =
-                LLVMModuleCreateWithNameInContext(into_raw_str!(name), ctx);
-
-            let fpm = LLVMCreateFunctionPassManagerForModule(module);
-            LLVMAddInstructionCombiningPass(fpm);
-            LLVMAddReassociatePass(fpm);
-            LLVMAddGVNPass(fpm);
-            LLVMAddCFGSimplificationPass(fpm);
-            LLVMInitializeFunctionPassManager(fpm); // TODO: Add more OPT pass
-
-            let typ_map = Arc::new(RefCell::new(HashMap::new()));
+            let ctx = CompileContext::new(name);
             self.get_statements().iter().for_each(|item| {
-                item.build(&CompileContext {
-                    llvm_ctx: ctx,
-                    module,
-                    fpm,
-                    builder,
-                    value_map: Arc::new(RefCell::new(HashMap::new())),
-                    typ_map: typ_map.clone(),
-                });
+                item.build(&ctx);
             });
 
-            LLVMDisposeBuilder(builder);
-            LLVMDumpModule(module);
+            ctx.print();
 
-            // Finish generate Codes
+            let engine = JITEngine::new(&ctx);
 
-            LLVMLinkInMCJIT();
-            LLVM_InitializeNativeTarget();
-            LLVM_InitializeNativeAsmPrinter();
-
-            let mut execution_engine = std::mem::uninitialized();
-            let mut out = std::mem::zeroed();
-            LLVMCreateExecutionEngineForModule(&mut execution_engine, module, &mut out);
-
-            let addr = LLVMGetFunctionAddress(execution_engine, into_raw_str!("Brighter"));
-
+            let addr = engine.get_func("Brighter");
             let f: extern "C" fn(i64, i64) -> i64 = std::mem::transmute(addr);
 
             let x = 1;
             let y = 1;
             let res = f(x, y);
-
             println!("{} {} {}", x, y, res);
-
-            LLVMDisposeExecutionEngine(execution_engine);
-            LLVMContextDispose(ctx);
+            engine.drop();
+            ctx.drop();
         }
+    }
+}
+
+impl<T: IrGen> IrGen for Box<T> {
+    fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
+        self.deref().build(ctx)
     }
 }
