@@ -206,7 +206,7 @@ impl IrGen for FunDefinition {
             );
             llvm::core::LLVMPositionBuilderAtEnd(builder, block);
 
-            let mut bind_map = value_map.clone(); // TODO: Join the HashMap in args
+            let mut bind_map = value_map.clone();
             for (index, var) in self.args.iter().enumerate() {
                 bind_map.insert(var.name.clone(), LLVMGetParam(function, index as u32));
             }
