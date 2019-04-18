@@ -9,7 +9,7 @@ use self::llvm::transforms::scalar::*;
 use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMPassManager};
 
 use crate::parser::*;
-use crate::llvm_macro::*;
+use crate::llvm_utils::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;

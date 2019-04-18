@@ -4,7 +4,7 @@ extern crate pest_derive;
 extern crate clap;
 
 #[macro_use]
-mod llvm_macro;
+mod llvm_utils;
 
 mod codegen;
 mod parser;
