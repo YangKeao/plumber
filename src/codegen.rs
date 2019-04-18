@@ -67,7 +67,7 @@ impl IrGen for Typ {
             Typ::U16 => Some((std::ptr::null_mut(), unsafe {LLVMInt16TypeInContext(ctx)})),
             Typ::U32 => Some((std::ptr::null_mut(), unsafe {LLVMInt32TypeInContext(ctx)})),
             Typ::U64 => Some((std::ptr::null_mut(), unsafe {LLVMInt64TypeInContext(ctx)})),
-            Typ::Struct(st) => Some((std::ptr::null_mut(), unsafe {LLVMGetTypeByName(module, format!("{}\0", st.get_name()).as_ptr() as *const _)}))
+            Typ::Struct(st) => Some((std::ptr::null_mut(), unsafe {*typ_map.get(&st.get_name().to_string()).unwrap()}))
         }
     }
 }
@@ -183,12 +183,15 @@ impl IrGen for FunDefinition {
         typ_map: &mut HashMap<String, LLVMTypeRef>,
     ) -> Option<(LLVMValueRef, LLVMTypeRef)>  {
         unsafe {
-            let int = llvm::core::LLVMInt64TypeInContext(ctx);
+            let ret_typ = self.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1;
 
-            let mut params = vec![int; self.args.len()];
+            println!("{:?}", &typ_map);
+
+            let mut params: Vec<_> = self.args.iter().map(|arg| {
+                arg.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1
+            }).collect();
             let function_type =
-                llvm::core::LLVMFunctionType(int, params.as_mut_ptr(), self.args.len() as u32, 0);
-            typ_map.insert(self.name.clone(), function_type);
+                llvm::core::LLVMFunctionType(ret_typ, params.as_mut_ptr(), self.args.len() as u32, 0);
 
             let function = llvm::core::LLVMAddFunction(
                 module,
@@ -213,7 +216,7 @@ impl IrGen for FunDefinition {
                 bind_map.insert(bind.var.name.clone(), value);
             });
             let ret_value = self.expr.build(ctx, module, builder, &mut bind_map, typ_map).unwrap().0;
-            let ret_value = LLVMBuildIntCast(builder, ret_value, self.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1, b"tmpcast\0".as_ptr() as *const _);
+            let ret_value = LLVMBuildIntCast(builder, ret_value, ret_typ, b"tmpcast\0".as_ptr() as *const _);
             llvm::core::LLVMBuildRet(
                 builder,
                 ret_value,
