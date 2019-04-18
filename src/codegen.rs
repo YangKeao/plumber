@@ -1,13 +1,12 @@
 extern crate llvm_sys as llvm;
 
-use self::llvm::analysis::LLVMVerifyFunction;
 use self::llvm::core::*;
 use self::llvm::execution_engine::*;
 use self::llvm::prelude::*;
 use self::llvm::target::*;
-use self::llvm::transforms::ipo::*;
+
 use self::llvm::transforms::scalar::*;
-use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMPassManager, LLVMValue};
+use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMPassManager};
 
 use crate::parser::*;
 use std::cell::RefCell;
@@ -25,11 +24,11 @@ struct CompileContext {
 }
 
 pub trait IrGen {
-    fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
+    fn build(&self, _ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
         unimplemented!()
     }
 
-    fn build_raw(&self, ctx: &CompileContext) {
+    fn build_raw(&self, _ctx: &CompileContext) {
         unimplemented!()
     }
 }
@@ -304,7 +303,7 @@ impl Compile for Program {
             LLVMAddCFGSimplificationPass(fpm);
             LLVMInitializeFunctionPassManager(fpm); // TODO: Add more OPT pass
 
-            let mut typ_map = Arc::new(RefCell::new(HashMap::new()));
+            let typ_map = Arc::new(RefCell::new(HashMap::new()));
             self.get_statements().iter().for_each(|item| {
                 item.build_raw(&CompileContext {
                     llvm_ctx: ctx,

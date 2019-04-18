@@ -1,14 +1,13 @@
 use crate::codegen::Compile;
 use pest::iterators::Pair;
 use pest::Parser;
-use std::io::SeekFrom::Start;
 
 #[derive(Parser)]
 #[grammar = "../grammar/plumber.pest"]
 pub struct Plumber;
 
 impl Plumber {
-    pub fn compile(file: &str, target: &str, module_name: &str) {
+    pub fn compile(file: &str, _target: &str, module_name: &str) {
         let ast = Plumber::parse(Rule::program, &file).unwrap_or_else(|e| panic!("{}", e));
         let program = Program::parse(ast);
         program.compile(module_name);
@@ -131,7 +130,7 @@ impl FunDefinition {
         let bindings = {
             let mut bindings = Vec::new();
             while vec[0].as_rule() == Rule::local_binding {
-                let mut local_binding: Vec<Pair<'_, Rule>> =
+                let local_binding: Vec<Pair<'_, Rule>> =
                     vec.remove(0).into_inner().into_iter().collect();
                 for local_binding in local_binding {
                     let mut bind: Vec<Pair<'_, Rule>> =
@@ -174,7 +173,7 @@ impl Expression {
     fn parse(expr: Pair<'_, Rule>) -> Self {
         if expr.as_rule() == Rule::expression {
             let mut expr: Vec<Pair<'_, Rule>> = expr.into_inner().collect();
-            let mut expr = expr.remove(0);
+            let expr = expr.remove(0);
             match expr.as_rule() {
                 Rule::binary_expression => {
                     Expression::BinaryExpression(BinaryExpression::parse(expr))
@@ -199,14 +198,14 @@ pub struct BinaryExpression {
 }
 
 impl BinaryExpression {
-    pub fn parse(mut binary_expression: Pair<'_, Rule>) -> Self {
+    pub fn parse(binary_expression: Pair<'_, Rule>) -> Self {
         if binary_expression.as_rule() != Rule::binary_expression {
             unreachable!()
         }
 
         let mut vec: Vec<Pair<'_, Rule>> = binary_expression.into_inner().collect();
         let first = vec.remove(0);
-        let first_rule = first.as_rule();
+        let _first_rule = first.as_rule();
         match first.as_rule() {
             Rule::binary_expression => BinaryExpression::parse(first),
             Rule::monadic_expression => {
@@ -273,7 +272,7 @@ impl MonadicExpression {
         if monadic_expression.as_rule() != Rule::monadic_expression {
             unreachable!()
         }
-        let mut pair = monadic_expression
+        let pair = monadic_expression
             .into_inner()
             .collect::<Vec<Pair<'_, Rule>>>()
             .remove(0);
