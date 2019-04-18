@@ -27,10 +27,6 @@ pub trait IrGen {
     fn build(&self, _ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
         unimplemented!()
     }
-
-    fn build_raw(&self, _ctx: &CompileContext) {
-        unimplemented!()
-    }
 }
 
 impl IrGen for StructDefinition {
@@ -272,15 +268,15 @@ impl IrGen for FunDefinition {
 }
 
 impl IrGen for Statement {
-    fn build_raw(&self, ctx: &CompileContext) {
+    fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
         match self {
             Statement::FunDefinition(fun_def) => {
-                fun_def.build(ctx);
+                fun_def.build(ctx)
             }
             Statement::StructDefinition(struct_def) => {
-                struct_def.build(ctx);
+                struct_def.build(ctx)
             }
-        };
+        }
     }
 }
 
