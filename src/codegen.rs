@@ -14,7 +14,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 #[derive(Clone)]
-struct CompileContext {
+pub struct CompileContext {
     pub llvm_ctx: *mut LLVMContext,
     pub module: *mut LLVMModule,
     pub fpm: *mut LLVMPassManager,
@@ -77,12 +77,12 @@ impl IrGen for Typ {
             Typ::U64 => Some((std::ptr::null_mut(), unsafe {
                 LLVMInt64TypeInContext(ctx.llvm_ctx)
             })),
-            Typ::Struct(st) => Some((std::ptr::null_mut(), unsafe {
+            Typ::Struct(st) => Some((std::ptr::null_mut(),
                 *ctx.typ_map
                     .borrow()
                     .get(&st.get_name().to_string())
                     .unwrap()
-            })),
+            )),
         }
     }
 }
