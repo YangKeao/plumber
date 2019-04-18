@@ -121,6 +121,11 @@ impl IrGen for MonadicExpression {
             }
             MonadicExpression::Variable(var) => Some((*value_map.get(var.get_name()).unwrap(), std::ptr::null_mut())), // TODO: Add Type for value
             MonadicExpression::Const(num) => Some((unsafe { LLVMConstInt(int, *num as u64, 0) }, Typ::I64.build(ctx, module, builder, value_map, typ_map).unwrap().1)),
+            MonadicExpression::TypeCast(type_cast) => {
+                let value = type_cast.inner.build(ctx, module, builder, value_map, typ_map).unwrap().0;
+                let typ = type_cast.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1;
+                Some((unsafe {LLVMBuildIntCast(builder, value, typ, b"tmpcast\0".as_ptr() as *const _)}, typ))
+            }
         }
     }
 }

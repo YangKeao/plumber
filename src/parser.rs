@@ -245,9 +245,26 @@ impl BinaryOperation {
 }
 
 #[derive(Debug)]
+pub struct TypeCast {
+    pub inner: Box<MonadicExpression>,
+    pub typ: Typ
+}
+
+impl TypeCast {
+    pub fn parse(type_cast: Pair<'_, Rule>) -> Self {
+        let mut inner: Vec<Pair<'_, Rule>> = type_cast.into_inner().into_iter().collect();
+        TypeCast {
+            typ: Typ::parse(inner.remove(0)),
+            inner: Box::new(MonadicExpression::parse(inner.remove(0))),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum MonadicExpression {
     FunctionCall(FunctionCall),
     Variable(Variable),
+    TypeCast(TypeCast),
     Const(i64),
 }
 
@@ -267,6 +284,7 @@ impl MonadicExpression {
             }
             Rule::const_value => MonadicExpression::Const(pair.as_str().parse::<i64>().unwrap()),
             Rule::monadic_expression => MonadicExpression::parse(pair),
+            Rule::type_cast => MonadicExpression::TypeCast(TypeCast::parse(pair)),
             _ => unreachable!(),
         }
     }

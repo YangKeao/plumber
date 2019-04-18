@@ -48,7 +48,12 @@ monadic_expression = {
     function_call |
     variable_name |
     const_value   |
+    type_cast     |
     ("(" ~ monadic_expression ~ ")")
+}
+
+type_cast = {
+     "<" ~ type_name ~ ">" ~ monadic_expression
 }
 
 binary_expression = {
