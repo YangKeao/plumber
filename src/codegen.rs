@@ -13,6 +13,12 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+macro_rules! into_raw_str {
+    ($x: expr) => (
+        format!("{}\0", $x).as_ptr() as *const _
+    )
+}
+
 #[derive(Clone)]
 pub struct CompileContext {
     pub llvm_ctx: *mut LLVMContext,
@@ -91,7 +97,7 @@ impl IrGen for MonadicExpression {
                 let function = unsafe {
                     LLVMGetNamedFunction(
                         ctx.module,
-                        format!("{}\0", fun_call.function_name.get_name()).as_ptr() as *const _,
+                        into_raw_str!(fun_call.function_name.get_name()),
                     )
                 };
                 let function_typ = *ctx
@@ -115,7 +121,7 @@ impl IrGen for MonadicExpression {
                                 ctx.builder,
                                 expr,
                                 params[index],
-                                b"tmpcast\0".as_ptr() as *const _,
+                                into_raw_str!("tmpcast"),
                             )
                         }
                     })
@@ -128,7 +134,7 @@ impl IrGen for MonadicExpression {
                             function,
                             args.as_mut_ptr(),
                             args.len() as u32,
-                            format!("{}\0", fun_call.function_name.get_name()).as_ptr() as *const _,
+                            into_raw_str!(fun_call.function_name.get_name()),
                         )
                     },
                     unsafe {
@@ -154,7 +160,7 @@ impl IrGen for MonadicExpression {
                 let typ = type_cast.typ.build(ctx).unwrap().1;
                 Some((
                     unsafe {
-                        LLVMBuildIntCast(ctx.builder, value, typ, b"tmpcast\0".as_ptr() as *const _)
+                        LLVMBuildIntCast(ctx.builder, value, typ, into_raw_str!("tmpcast"))
                     },
                     typ,
                 ))
@@ -169,20 +175,20 @@ impl IrGen for BinaryExpression {
         let right = self.right.build(ctx).unwrap().0; // TODO: cast type for binary operator
         match self.op {
             BinaryOperation::Plus => Some((
-                unsafe { LLVMBuildAdd(ctx.builder, left, right, b"addtmp\0".as_ptr() as *const _) },
+                unsafe { LLVMBuildAdd(ctx.builder, left, right, into_raw_str!("addtmp")) },
                 std::ptr::null_mut(),
             )),
             BinaryOperation::Minus => Some((
-                unsafe { LLVMBuildSub(ctx.builder, left, right, b"subtmp\0".as_ptr() as *const _) },
+                unsafe { LLVMBuildSub(ctx.builder, left, right, into_raw_str!("minustmp")) },
                 std::ptr::null_mut(),
             )),
             BinaryOperation::Mul => Some((
-                unsafe { LLVMBuildMul(ctx.builder, left, right, b"multmp\0".as_ptr() as *const _) },
+                unsafe { LLVMBuildMul(ctx.builder, left, right, into_raw_str!("multmp")) },
                 std::ptr::null_mut(),
             )),
             BinaryOperation::Div => Some((
                 unsafe {
-                    LLVMBuildSDiv(ctx.builder, left, right, b"multmp\0".as_ptr() as *const _)
+                    LLVMBuildSDiv(ctx.builder, left, right, into_raw_str!("divtmp"))
                 },
                 std::ptr::null_mut(),
             )),
@@ -222,14 +228,14 @@ impl IrGen for FunDefinition {
 
             let function = llvm::core::LLVMAddFunction(
                 ctx.module,
-                format!("{}\0", self.name).as_ptr() as *const _,
+                into_raw_str!(self.name),
                 function_type,
             );
 
             let block = llvm::core::LLVMAppendBasicBlockInContext(
                 ctx.llvm_ctx,
                 function,
-                b"entry\0".as_ptr() as *const _,
+                into_raw_str!("entry"),
             );
             llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, block);
 
@@ -246,7 +252,7 @@ impl IrGen for FunDefinition {
                     ctx.builder,
                     value,
                     bind.var.typ.build(&ctx).unwrap().1,
-                    b"tmpcast\0".as_ptr() as *const _,
+                    into_raw_str!("tmpcast"),
                 );
                 ctx.value_map
                     .borrow_mut()
@@ -257,7 +263,7 @@ impl IrGen for FunDefinition {
                 ctx.builder,
                 ret_value,
                 ret_typ,
-                b"tmpcast\0".as_ptr() as *const _,
+                into_raw_str!("tmpcast"),
             );
             llvm::core::LLVMBuildRet(ctx.builder, ret_value);
 
@@ -290,7 +296,7 @@ impl Compile for Program {
             let ctx = LLVMContextCreate();
             let builder = LLVMCreateBuilderInContext(ctx);
             let module =
-                LLVMModuleCreateWithNameInContext(format!("{}\0", name).as_ptr() as *const _, ctx);
+                LLVMModuleCreateWithNameInContext(into_raw_str!(name), ctx);
 
             let fpm = LLVMCreateFunctionPassManagerForModule(module);
             LLVMAddInstructionCombiningPass(fpm);
@@ -301,7 +307,7 @@ impl Compile for Program {
 
             let typ_map = Arc::new(RefCell::new(HashMap::new()));
             self.get_statements().iter().for_each(|item| {
-                item.build_raw(&CompileContext {
+                item.build(&CompileContext {
                     llvm_ctx: ctx,
                     module,
                     fpm,
@@ -324,7 +330,7 @@ impl Compile for Program {
             let mut out = std::mem::zeroed();
             LLVMCreateExecutionEngineForModule(&mut execution_engine, module, &mut out);
 
-            let addr = LLVMGetFunctionAddress(execution_engine, b"Brighter\0".as_ptr() as *const _);
+            let addr = LLVMGetFunctionAddress(execution_engine, into_raw_str!("Brighter"));
 
             let f: extern "C" fn(i64, i64) -> i64 = std::mem::transmute(addr);
 
