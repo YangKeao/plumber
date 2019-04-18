@@ -27,7 +27,7 @@ impl Variable {
 #[derive(Debug)]
 pub struct VariableDefine {
     pub name: String,
-    pub typ: Typ
+    pub typ: Typ,
 }
 
 impl VariableDefine {
@@ -38,7 +38,7 @@ impl VariableDefine {
         let mut vec: Vec<Pair<'_, Rule>> = var_definition.into_inner().into_iter().collect();
         VariableDefine {
             name: String::from(vec.remove(0).as_str()),
-            typ: Typ::parse(vec.remove(0))
+            typ: Typ::parse(vec.remove(0)),
         }
     }
 }
@@ -62,7 +62,7 @@ pub enum Typ {
     U16,
     U32,
     U64,
-    Struct(Struct)
+    Struct(Struct),
 }
 
 impl Typ {
@@ -79,7 +79,7 @@ impl Typ {
             "u16" => Typ::U16,
             "u32" => Typ::U32,
             "u64" => Typ::U64,
-            _ => Typ::Struct(Struct(String::from(typ.as_str())))
+            _ => Typ::Struct(Struct(String::from(typ.as_str()))),
         }
     }
 }
@@ -247,7 +247,7 @@ impl BinaryOperation {
 #[derive(Debug)]
 pub struct TypeCast {
     pub inner: Box<MonadicExpression>,
-    pub typ: Typ
+    pub typ: Typ,
 }
 
 impl TypeCast {
@@ -353,10 +353,7 @@ impl StructDefinition {
             }
             fields
         };
-        Self {
-            name,
-            fields,
-        }
+        Self { name, fields }
     }
 }
 
