@@ -3,17 +3,20 @@ extern crate llvm_sys as llvm;
 use self::llvm::core::*;
 use self::llvm::execution_engine::*;
 use self::llvm::prelude::{LLVMValueRef, LLVMTypeRef};
-use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMValue};
+use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMValue, LLVMPassManager};
 use crate::parser::*;
 use std::collections::HashMap;
 use self::llvm::target::{LLVM_InitializeNativeTarget, LLVM_InitializeNativeAsmPrinter};
 use self::llvm::analysis::LLVMVerifyFunction;
+use self::llvm::transforms::scalar::{LLVMAddInstructionCombiningPass, LLVMAddReassociatePass, LLVMAddGVNPass, LLVMAddCFGSimplificationPass};
+use self::llvm::transforms::ipo::{LLVMAddIPSCCPPass, LLVMAddConstantMergePass, LLVMAddFunctionInliningPass, LLVMAddGlobalOptimizerPass};
 
 pub trait IrGen {
     fn build(
         &self,
         ctx: *mut LLVMContext,
         module: *mut LLVMModule,
+        fpm: *mut LLVMPassManager,
         builder: *mut LLVMBuilder,
         value_map: &mut HashMap<String, LLVMValueRef>,
         typ_map: &mut HashMap<String, LLVMTypeRef>,
@@ -24,6 +27,7 @@ pub trait IrGen {
     fn build_raw(&self,
                  ctx: *mut LLVMContext,
                  module: *mut LLVMModule,
+                 fpm: *mut LLVMPassManager,
                  builder: *mut LLVMBuilder,
                  value_map: &mut HashMap<String, LLVMValueRef>,
                  typ_map: &mut HashMap<String, LLVMTypeRef>,) {
@@ -36,12 +40,13 @@ impl IrGen for StructDefinition {
         &self,
         ctx: *mut LLVMContext,
         module: *mut LLVMModule,
+        fpm: *mut LLVMPassManager,
         builder: *mut LLVMBuilder,
         value_map: &mut HashMap<String, LLVMValueRef>,
         typ_map: &mut HashMap<String, LLVMTypeRef>,
     ) -> Option<(LLVMValueRef, LLVMTypeRef)> {
         let mut fields: Vec<LLVMTypeRef> = self.fields.iter().map(|field| {
-            field.build(ctx, module, builder, value_map, typ_map).unwrap().1
+            field.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().1
         }).collect();
         let typ =unsafe {LLVMStructTypeInContext(ctx, fields.as_mut_ptr(), fields.len() as u32, 0)};
         typ_map.insert(self.name.get_name().to_string(), typ);
@@ -54,6 +59,7 @@ impl IrGen for Typ {
         &self,
         ctx: *mut LLVMContext,
         module: *mut LLVMModule,
+        fpm: *mut LLVMPassManager,
         builder: *mut LLVMBuilder,
         value_map: &mut HashMap<String, LLVMValueRef>,
         typ_map: &mut HashMap<String, LLVMTypeRef>,
@@ -77,6 +83,7 @@ impl IrGen for MonadicExpression {
         &self,
         ctx: *mut LLVMContext,
         module: *mut LLVMModule,
+        fpm: *mut LLVMPassManager,
         builder: *mut LLVMBuilder,
         value_map: &mut HashMap<String, LLVMValueRef>,
         typ_map: &mut HashMap<String, LLVMTypeRef>,
@@ -102,7 +109,7 @@ impl IrGen for MonadicExpression {
                     .args
                     .iter().enumerate()
                     .map(|(index, item)| {
-                        let expr = item.build(ctx, module, builder, value_map, typ_map).unwrap().0;
+                        let expr = item.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().0;
                         unsafe {LLVMBuildIntCast(builder, expr, params[index], b"tmpcast\0".as_ptr() as *const _)}
                     })
                     .collect();
@@ -120,10 +127,10 @@ impl IrGen for MonadicExpression {
                 }))
             }
             MonadicExpression::Variable(var) => Some((*value_map.get(var.get_name()).unwrap(), std::ptr::null_mut())), // TODO: Add Type for value
-            MonadicExpression::Const(num) => Some((unsafe { LLVMConstInt(int, *num as u64, 0) }, Typ::I64.build(ctx, module, builder, value_map, typ_map).unwrap().1)),
+            MonadicExpression::Const(num) => Some((unsafe { LLVMConstInt(int, *num as u64, 0) }, Typ::I64.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().1)),
             MonadicExpression::TypeCast(type_cast) => {
-                let value = type_cast.inner.build(ctx, module, builder, value_map, typ_map).unwrap().0;
-                let typ = type_cast.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1;
+                let value = type_cast.inner.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().0;
+                let typ = type_cast.typ.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().1;
                 Some((unsafe {LLVMBuildIntCast(builder, value, typ, b"tmpcast\0".as_ptr() as *const _)}, typ))
             }
         }
@@ -135,12 +142,13 @@ impl IrGen for BinaryExpression {
         &self,
         ctx: *mut LLVMContext,
         module: *mut LLVMModule,
+        fpm: *mut LLVMPassManager,
         builder: *mut LLVMBuilder,
         value_map: &mut HashMap<String, LLVMValueRef>,
         typ_map: &mut HashMap<String, LLVMTypeRef>,
     ) -> Option<(LLVMValueRef, LLVMTypeRef)> {
-        let left = self.left.build(ctx, module, builder, value_map, typ_map).unwrap().0;
-        let right = self.right.build(ctx, module, builder, value_map, typ_map).unwrap().0; // TODO: cast type for binary operator
+        let left = self.left.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().0;
+        let right = self.right.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().0; // TODO: cast type for binary operator
         match self.op {
             BinaryOperation::Plus => Some((unsafe {
                 LLVMBuildAdd(builder, left, right, b"addtmp\0".as_ptr() as *const _)
@@ -163,16 +171,17 @@ impl IrGen for Expression {
         &self,
         ctx: *mut LLVMContext,
         module: *mut LLVMModule,
+        fpm: *mut LLVMPassManager,
         builder: *mut LLVMBuilder,
         value_map: &mut HashMap<String, LLVMValueRef>,
         typ_map: &mut HashMap<String, LLVMTypeRef>,
     ) -> Option<(LLVMValueRef, LLVMTypeRef)>  {
         match self {
             Expression::BinaryExpression(binary_expr) => {
-                binary_expr.build(ctx, module, builder, value_map, typ_map)
+                binary_expr.build(ctx, module, fpm,builder, value_map, typ_map)
             }
             Expression::MonadicExpression(monadic_expr) => {
-                monadic_expr.build(ctx, module, builder, value_map, typ_map)
+                monadic_expr.build(ctx, module, fpm,builder, value_map, typ_map)
             }
         }
     }
@@ -183,15 +192,16 @@ impl IrGen for FunDefinition {
         &self,
         ctx: *mut LLVMContext,
         module: *mut LLVMModule,
+        fpm: *mut LLVMPassManager,
         builder: *mut LLVMBuilder,
         value_map: &mut HashMap<String, LLVMValueRef>,
         typ_map: &mut HashMap<String, LLVMTypeRef>,
     ) -> Option<(LLVMValueRef, LLVMTypeRef)>  {
         unsafe {
-            let ret_typ = self.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1;
+            let ret_typ = self.typ.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().1;
 
             let mut params: Vec<_> = self.args.iter().map(|arg| {
-                arg.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1
+                arg.typ.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().1
             }).collect();
             let function_type =
                 llvm::core::LLVMFunctionType(ret_typ, params.as_mut_ptr(), self.args.len() as u32, 0);
@@ -216,16 +226,18 @@ impl IrGen for FunDefinition {
                 bind_map.insert(var.name.clone(), LLVMGetParam(function, index as u32));
             }
             self.bindings.iter().for_each(|bind| {
-                let value = bind.value.build(ctx, module, builder, &mut bind_map, typ_map).unwrap().0;
-                let value = LLVMBuildIntCast(builder, value, bind.var.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1, b"tmpcast\0".as_ptr() as *const _);
+                let value = bind.value.build(ctx, module, fpm,builder, &mut bind_map, typ_map).unwrap().0;
+                let value = LLVMBuildIntCast(builder, value, bind.var.typ.build(ctx, module, fpm,builder, value_map, typ_map).unwrap().1, b"tmpcast\0".as_ptr() as *const _);
                 bind_map.insert(bind.var.name.clone(), value);
             });
-            let ret_value = self.expr.build(ctx, module, builder, &mut bind_map, typ_map).unwrap().0;
+            let ret_value = self.expr.build(ctx, module, fpm,builder, &mut bind_map, typ_map).unwrap().0;
             let ret_value = LLVMBuildIntCast(builder, ret_value, ret_typ, b"tmpcast\0".as_ptr() as *const _);
             llvm::core::LLVMBuildRet(
                 builder,
                 ret_value,
             );
+
+            LLVMRunFunctionPassManager(fpm, function);
             Some((function, function_type))
         }
     }
@@ -236,13 +248,14 @@ impl IrGen for Statement {
         &self,
         ctx: *mut LLVMContext,
         module: *mut LLVMModule,
+        fpm: *mut LLVMPassManager,
         builder: *mut LLVMBuilder,
         value_map: &mut HashMap<String, LLVMValueRef>,
         typ_map: &mut HashMap<String, LLVMTypeRef>,
     ) {
         match self {
-            Statement::FunDefinition(fun_def) => {fun_def.build(ctx, module, builder, value_map, typ_map);},
-            Statement::StructDefinition(struct_def) => {struct_def.build(ctx, module, builder, value_map, typ_map);},
+            Statement::FunDefinition(fun_def) => {fun_def.build(ctx, module, fpm, builder, value_map, typ_map);},
+            Statement::StructDefinition(struct_def) => {struct_def.build(ctx, module, fpm,builder, value_map, typ_map);},
         };
     }
 }
@@ -259,13 +272,22 @@ impl Compile for Program {
             let module =
                 LLVMModuleCreateWithNameInContext(format!("{}\0", name).as_ptr() as *const _, ctx);
 
+            let fpm = LLVMCreateFunctionPassManagerForModule(module);
+            LLVMAddInstructionCombiningPass(fpm);
+            LLVMAddReassociatePass(fpm);
+            LLVMAddGVNPass(fpm);
+            LLVMAddCFGSimplificationPass(fpm);
+            LLVMInitializeFunctionPassManager(fpm); // TODO: Add more OPT pass
+
             let mut typ_map = HashMap::new();
             self.get_statements().iter().for_each(|item| {
-                item.build_raw(ctx, module, builder, &mut HashMap::new(), &mut typ_map);
+                item.build_raw(ctx, module, fpm, builder, &mut HashMap::new(), &mut typ_map);
             });
 
             LLVMDisposeBuilder(builder);
             LLVMDumpModule(module);
+
+            // Finish generate Codes
 
             LLVMLinkInMCJIT();
             LLVM_InitializeNativeTarget();
