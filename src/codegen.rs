@@ -8,12 +8,12 @@ use self::llvm::target::*;
 use self::llvm::transforms::scalar::*;
 use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMPassManager};
 
-use crate::parser::*;
 use crate::llvm_utils::*;
+use crate::parser::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::ops::Deref;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct CompileContext {
@@ -30,8 +30,7 @@ impl CompileContext {
         unsafe {
             let ctx = LLVMContextCreate();
             let builder = LLVMCreateBuilderInContext(ctx);
-            let module =
-                LLVMModuleCreateWithNameInContext(into_raw_str!(name), ctx);
+            let module = LLVMModuleCreateWithNameInContext(into_raw_str!(name), ctx);
 
             let fpm = LLVMCreateFunctionPassManagerForModule(module);
             LLVMAddInstructionCombiningPass(fpm);
@@ -66,7 +65,7 @@ impl CompileContext {
 
 pub struct JITEngine<'a> {
     ctx: &'a CompileContext,
-    engine: LLVMExecutionEngineRef
+    engine: LLVMExecutionEngineRef,
 }
 
 impl<'a> JITEngine<'a> {
@@ -81,13 +80,10 @@ impl<'a> JITEngine<'a> {
             LLVMCreateExecutionEngineForModule(&mut execution_engine, ctx.module, &mut out);
             execution_engine
         };
-        JITEngine {
-            ctx,
-            engine,
-        }
+        JITEngine { ctx, engine }
     }
     fn get_func(&self, name: &str) -> u64 {
-        unsafe {LLVMGetFunctionAddress(self.engine, into_raw_str!(name))}
+        unsafe { LLVMGetFunctionAddress(self.engine, into_raw_str!(name)) }
     }
     fn drop(self) {
         unsafe {
@@ -128,11 +124,12 @@ impl IrGen for Typ {
             Typ::U16 => Some((std::ptr::null_mut(), llvm_i16!(ctx))),
             Typ::U32 => Some((std::ptr::null_mut(), llvm_i32!(ctx))),
             Typ::U64 => Some((std::ptr::null_mut(), llvm_i64!(ctx))),
-            Typ::Struct(st) => Some((std::ptr::null_mut(),
+            Typ::Struct(st) => Some((
+                std::ptr::null_mut(),
                 *ctx.typ_map
                     .borrow_mut()
                     .get(&st.get_name().to_string())
-                    .unwrap()
+                    .unwrap(),
             )),
         }
     }
@@ -199,10 +196,7 @@ impl IrGen for MonadicExpression {
             MonadicExpression::TypeCast(type_cast) => {
                 let value = evaluate_value(ctx, &type_cast.inner);
                 let typ = evaluate_type(ctx, &type_cast.typ);
-                Some((
-                    llvm_cast_int(ctx, value, typ),
-                    typ,
-                ))
+                Some((llvm_cast_int(ctx, value, typ), typ))
             }
         }
     }
@@ -213,22 +207,10 @@ impl IrGen for BinaryExpression {
         let left = evaluate_value(ctx, &self.left);
         let right = evaluate_value(ctx, &self.right); // TODO: cast type for binary operator
         match self.op {
-            BinaryOperation::Plus => Some((
-                llvm_add(ctx, left, right),
-                std::ptr::null_mut(),
-            )),
-            BinaryOperation::Minus => Some((
-                llvm_sub(ctx, left, right),
-                std::ptr::null_mut(),
-            )),
-            BinaryOperation::Mul => Some((
-                llvm_mul(ctx, left, right),
-                std::ptr::null_mut(),
-            )),
-            BinaryOperation::Div => Some((
-                llvm_div(ctx, left, right),
-                std::ptr::null_mut(),
-            )),
+            BinaryOperation::Plus => Some((llvm_add(ctx, left, right), std::ptr::null_mut())),
+            BinaryOperation::Minus => Some((llvm_sub(ctx, left, right), std::ptr::null_mut())),
+            BinaryOperation::Mul => Some((llvm_mul(ctx, left, right), std::ptr::null_mut())),
+            BinaryOperation::Div => Some((llvm_div(ctx, left, right), std::ptr::null_mut())),
         }
     }
 }
@@ -263,11 +245,8 @@ impl IrGen for FunDefinition {
                 .borrow_mut()
                 .insert(self.name.to_string(), function_type);
 
-            let function = llvm::core::LLVMAddFunction(
-                ctx.module,
-                into_raw_str!(self.name),
-                function_type,
-            );
+            let function =
+                llvm::core::LLVMAddFunction(ctx.module, into_raw_str!(self.name), function_type);
 
             let block = llvm::core::LLVMAppendBasicBlockInContext(
                 ctx.llvm_ctx,
@@ -303,12 +282,8 @@ impl IrGen for FunDefinition {
 impl IrGen for Statement {
     fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
         match self {
-            Statement::FunDefinition(fun_def) => {
-                fun_def.build(ctx)
-            }
-            Statement::StructDefinition(struct_def) => {
-                struct_def.build(ctx)
-            }
+            Statement::FunDefinition(fun_def) => fun_def.build(ctx),
+            Statement::StructDefinition(struct_def) => struct_def.build(ctx),
         }
     }
 }
