@@ -1,11 +1,13 @@
 extern crate llvm_sys as llvm;
 
-use self::llvm::core::{LLVMAddTargetDependentFunctionAttr, LLVMBuildAdd, LLVMBuildCall, LLVMBuildMul, LLVMBuildSub, LLVMConstInt, LLVMGetNamedFunction, LLVMGetParam, LLVMBuildSDiv};
-use self::llvm::execution_engine::LLVMRecompileAndRelinkFunction;
+use self::llvm::core::*;
+use self::llvm::execution_engine::*;
 use self::llvm::prelude::LLVMValueRef;
 use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMValue};
 use crate::parser::*;
 use std::collections::HashMap;
+use self::llvm::target::{LLVM_InitializeNativeTarget, LLVM_InitializeNativeAsmPrinter};
+use self::llvm::analysis::LLVMVerifyFunction;
 
 pub trait IrGen {
     fn build(
@@ -168,19 +170,38 @@ pub trait Compile {
 impl Compile for Program {
     fn compile(&self, name: &str) {
         unsafe {
-            let ctx = llvm::core::LLVMContextCreate();
-            let builder = llvm::core::LLVMCreateBuilderInContext(ctx);
+            let ctx = LLVMContextCreate();
+            let builder = LLVMCreateBuilderInContext(ctx);
             let module =
-                llvm::core::LLVMModuleCreateWithName(format!("{}\0", name).as_ptr() as *const _);
+                LLVMModuleCreateWithNameInContext(format!("{}\0", name).as_ptr() as *const _, ctx);
 
             self.get_statements().iter().for_each(|item| {
                 item.build(ctx, module, builder, &HashMap::new());
             });
 
-            llvm::core::LLVMDisposeBuilder(builder);
-            llvm::core::LLVMDumpModule(module);
-            llvm::core::LLVMDisposeModule(module);
-            llvm::core::LLVMContextDispose(ctx);
+            LLVMDisposeBuilder(builder);
+            LLVMDumpModule(module);
+
+            LLVMLinkInMCJIT();
+            LLVM_InitializeNativeTarget();
+            LLVM_InitializeNativeAsmPrinter();
+
+            let mut execution_engine = std::mem::uninitialized();
+            let mut out = std::mem::zeroed();
+            LLVMCreateExecutionEngineForModule(&mut execution_engine, module, &mut out);
+
+            let addr = LLVMGetFunctionAddress(execution_engine, b"Brighter\0".as_ptr() as *const _);
+
+            let f: extern "C" fn(i64, i64) -> i64 = std::mem::transmute(addr);
+
+            let x = 1;
+            let y = 1;
+            let res = f(x, y, );
+
+            println!("{} {} {}", x, y, res);
+
+            LLVMDisposeExecutionEngine(execution_engine);
+            LLVMContextDispose(ctx);
         }
     }
 }
