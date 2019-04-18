@@ -126,9 +126,11 @@ impl FunDefinition {
             args
         };
 
+        let typ = Typ::parse(vec.remove(0));
+
         let bindings = {
             let mut bindings = Vec::new();
-            if vec[0].as_rule() == Rule::local_binding {
+            while vec[0].as_rule() == Rule::local_binding {
                 let mut local_binding: Vec<Pair<'_, Rule>> =
                     vec.remove(0).into_inner().into_iter().collect();
                 for local_binding in local_binding {
@@ -142,8 +144,6 @@ impl FunDefinition {
             }
             bindings
         };
-
-        let typ = Typ::parse(vec.remove(0));
 
         let expr = Expression::parse(vec.remove(0));
         FunDefinition {
