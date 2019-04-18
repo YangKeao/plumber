@@ -3,17 +3,12 @@ extern crate llvm_sys as llvm;
 use self::llvm::analysis::LLVMVerifyFunction;
 use self::llvm::core::*;
 use self::llvm::execution_engine::*;
-use self::llvm::prelude::{LLVMTypeRef, LLVMValueRef};
-use self::llvm::target::{LLVM_InitializeNativeAsmPrinter, LLVM_InitializeNativeTarget};
-use self::llvm::transforms::ipo::{
-    LLVMAddConstantMergePass, LLVMAddFunctionInliningPass, LLVMAddGlobalOptimizerPass,
-    LLVMAddIPSCCPPass,
-};
-use self::llvm::transforms::scalar::{
-    LLVMAddCFGSimplificationPass, LLVMAddGVNPass, LLVMAddInstructionCombiningPass,
-    LLVMAddReassociatePass,
-};
+use self::llvm::prelude::*;
+use self::llvm::target::*;
+use self::llvm::transforms::ipo::*;
+use self::llvm::transforms::scalar::*;
 use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMPassManager, LLVMValue};
+
 use crate::parser::*;
 use std::cell::RefCell;
 use std::collections::HashMap;
