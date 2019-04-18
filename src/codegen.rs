@@ -185,13 +185,13 @@ impl IrGen for FunDefinition {
         unsafe {
             let ret_typ = self.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1;
 
-            println!("{:?}", &typ_map);
-
             let mut params: Vec<_> = self.args.iter().map(|arg| {
                 arg.typ.build(ctx, module, builder, value_map, typ_map).unwrap().1
             }).collect();
             let function_type =
                 llvm::core::LLVMFunctionType(ret_typ, params.as_mut_ptr(), self.args.len() as u32, 0);
+
+            typ_map.insert(self.name.to_string(), function_type);
 
             let function = llvm::core::LLVMAddFunction(
                 module,
@@ -221,8 +221,8 @@ impl IrGen for FunDefinition {
                 builder,
                 ret_value,
             );
+            Some((function, function_type))
         }
-        None
     }
 }
 
