@@ -245,7 +245,7 @@ impl BinaryOperation {
 
 #[derive(Debug)]
 pub struct TypeCast {
-    pub inner: Box<MonadicExpression>,
+    pub inner: Box<Expression>,
     pub typ: Typ,
 }
 
@@ -254,7 +254,7 @@ impl TypeCast {
         let mut inner: Vec<Pair<'_, Rule>> = type_cast.into_inner().into_iter().collect();
         TypeCast {
             typ: Typ::parse(inner.remove(0)),
-            inner: Box::new(MonadicExpression::parse(inner.remove(0))),
+            inner: Box::new(Expression::parse(inner.remove(0))),
         }
     }
 }

@@ -53,7 +53,7 @@ monadic_expression = {
 }
 
 type_cast = {
-     "<" ~ type_name ~ ">" ~ monadic_expression
+     "<" ~ type_name ~ ">" ~ expression
 }
 
 binary_expression = {

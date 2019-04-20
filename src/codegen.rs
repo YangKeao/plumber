@@ -205,8 +205,8 @@ impl IrGen for FunctionCall {
             .iter()
             .enumerate()
             .map(|(index, item)| {
-                let expr = evaluate_value::<Expression, _>(ctx, item);
-                llvm_cast_int(ctx, expr, params[index])
+                evaluate_value::<Expression, _>(ctx, item)
+//                llvm_cast_int(ctx, expr, params[index])
             })
             .collect();
         Some((
@@ -317,13 +317,13 @@ impl IrGen for FunDefinition {
             ctx.value_map = Arc::new(RefCell::new(bind_map));
             self.bindings.iter().for_each(|bind| {
                 let value = bind.value.build(&ctx).unwrap().0;
-                let value = llvm_cast_int(&ctx, value, bind.var.typ.build(&ctx).unwrap().1); // TODO: Cast not only Int
+//                let value = llvm_cast_int(&ctx, value, bind.var.typ.build(&ctx).unwrap().1); // TODO: Cast not only Int
                 ctx.value_map
                     .borrow_mut()
                     .insert(Ident::new(bind.var.name.clone(), IdentType::Variable), value);
             });
             let ret_value = self.expr.build(&ctx).unwrap().0;
-            let ret_value = llvm_cast_int(&ctx, ret_value, ret_typ); // TODO: Cast not only Int
+//            let ret_value = llvm_cast_int(&ctx, ret_value, ret_typ); // TODO: Cast not only Int
             LLVMBuildRet(ctx.builder, ret_value);
 
             LLVMRunFunctionPassManager(ctx.fpm, function);
