@@ -10,11 +10,12 @@ COMMENT = _{ "//" ~ (!"\n" ~ ANY)*}
 definition_prefix = _{ ext }
     ext = {"extern"}
 
-binary_operation = _{ plus | mul | minus | div }
+binary_operation = _{ plus | mul | minus | div | dot }
     plus = {"+"}
     mul = {"*"}
     minus = {"-"}
     div = {"/"}
+    dot = {"."}
 
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 
@@ -49,7 +50,7 @@ monadic_expression = {
     variable_name |
     const_value   |
     type_cast     |
-    ("(" ~ monadic_expression ~ ")")
+    ("(" ~ expression ~ ")")
 }
 
 type_cast = {

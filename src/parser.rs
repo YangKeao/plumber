@@ -194,7 +194,7 @@ impl Expression {
 pub struct BinaryExpression {
     pub left: Box<MonadicExpression>,
     pub right: Box<Expression>,
-    pub op: BinaryOperation,
+    pub op: BinaryOperator,
 }
 
 impl BinaryExpression {
@@ -214,7 +214,7 @@ impl BinaryExpression {
                 let right = vec.remove(0);
                 BinaryExpression {
                     left: Box::new(MonadicExpression::parse(left)),
-                    op: BinaryOperation::parse(op),
+                    op: BinaryOperator::parse(op),
                     right: Box::new(Expression::parse(right)),
                 }
             }
@@ -224,20 +224,22 @@ impl BinaryExpression {
 }
 
 #[derive(Debug)]
-pub enum BinaryOperation {
+pub enum BinaryOperator {
     Plus,
     Mul,
     Minus,
     Div,
+    Dot
 }
 
-impl BinaryOperation {
+impl BinaryOperator {
     pub fn parse(op: Pair<'_, Rule>) -> Self {
         match op.as_rule() {
-            Rule::plus => BinaryOperation::Plus,
-            Rule::mul => BinaryOperation::Mul,
-            Rule::minus => BinaryOperation::Minus,
-            Rule::div => BinaryOperation::Div,
+            Rule::plus => BinaryOperator::Plus,
+            Rule::mul => BinaryOperator::Mul,
+            Rule::minus => BinaryOperator::Minus,
+            Rule::div => BinaryOperator::Div,
+            Rule::dot => BinaryOperator::Dot,
             _ => unreachable!(),
         }
     }
@@ -264,6 +266,7 @@ pub enum MonadicExpression {
     FunctionCall(FunctionCall),
     Variable(Variable),
     TypeCast(TypeCast),
+    Expression(Box<Expression>),
     Const(i64),
 }
 
@@ -282,7 +285,7 @@ impl MonadicExpression {
                 MonadicExpression::Variable(Variable(String::from(pair.as_str())))
             }
             Rule::const_value => MonadicExpression::Const(pair.as_str().parse::<i64>().unwrap()),
-            Rule::monadic_expression => MonadicExpression::parse(pair),
+            Rule::expression => MonadicExpression::Expression(Box::new(Expression::parse(pair))),
             Rule::type_cast => MonadicExpression::TypeCast(TypeCast::parse(pair)),
             _ => unreachable!(),
         }

@@ -1,5 +1,5 @@
 use crate::codegen::{CompileContext, IrGen};
-use llvm_sys::core::{LLVMBuildAdd, LLVMBuildIntCast, LLVMBuildMul, LLVMBuildSDiv, LLVMBuildSub};
+use llvm_sys::core::{LLVMBuildAdd, LLVMBuildIntCast, LLVMBuildMul, LLVMBuildSDiv, LLVMBuildSub, LLVMBuildStructGEP, LLVMDumpValue};
 use llvm_sys::prelude::{LLVMTypeRef, LLVMValueRef};
 use std::ops::Deref;
 macro_rules! into_raw_str {
@@ -19,6 +19,10 @@ pub fn llvm_mul(ctx: &CompileContext, left: LLVMValueRef, right: LLVMValueRef) -
 }
 pub fn llvm_div(ctx: &CompileContext, left: LLVMValueRef, right: LLVMValueRef) -> LLVMValueRef {
     unsafe { LLVMBuildSDiv(ctx.builder, left, right, into_raw_str!("divtmp")) } // TODO: support Unsigned Div
+}
+
+pub fn llvm_gep(ctx: &CompileContext, left: LLVMValueRef, right: i64) -> LLVMValueRef {
+    unsafe { LLVMBuildStructGEP(ctx.builder, left, right as u32, into_raw_str!("geptmp")) }
 }
 
 macro_rules! llvm_i8 {

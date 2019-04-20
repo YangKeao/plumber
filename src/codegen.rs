@@ -6,7 +6,7 @@ use self::llvm::prelude::*;
 use self::llvm::target::*;
 
 use self::llvm::transforms::scalar::*;
-use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMPassManager};
+use self::llvm::{LLVMBuilder, LLVMContext, LLVMModule, LLVMPassManager, LLVMType};
 
 use crate::llvm_utils::*;
 use crate::parser::*;
@@ -55,10 +55,10 @@ impl CompileContext {
             let module = LLVMModuleCreateWithNameInContext(into_raw_str!(name), ctx);
 
             let fpm = LLVMCreateFunctionPassManagerForModule(module);
-            LLVMAddInstructionCombiningPass(fpm);
-            LLVMAddReassociatePass(fpm);
-            LLVMAddGVNPass(fpm);
-            LLVMAddCFGSimplificationPass(fpm);
+//            LLVMAddInstructionCombiningPass(fpm);
+//            LLVMAddReassociatePass(fpm);
+//            LLVMAddGVNPass(fpm);
+//            LLVMAddCFGSimplificationPass(fpm);
             LLVMInitializeFunctionPassManager(fpm); // TODO: Add more OPT pass
 
             let typ_map = Arc::new(RefCell::new(HashMap::new()));
@@ -147,7 +147,7 @@ impl IrGen for StructDefinition {
         let ptr = unsafe {LLVMBuildAlloca(ctx.builder, typ, into_raw_str!("tmpalloca"))};
         for i in 0..fields.len() {
             unsafe {
-                let field = LLVMBuildStructGEP(ctx.builder, ptr, i as u32, into_raw_str!("tmpgep"));
+                let field = llvm_gep(ctx, ptr, i as i64);
                 LLVMBuildStore(ctx.builder, LLVMGetParam(function, i as u32), field);
             }
         }
@@ -246,6 +246,7 @@ impl IrGen for MonadicExpression {
                 unsafe { LLVMConstInt(llvm_i64!(ctx), *num as u64, 0) },
                 Typ::I64.build(ctx).unwrap().1,
             )),
+            MonadicExpression::Expression(expr) => expr.build(ctx),
             MonadicExpression::TypeCast(type_cast) => {
                 let value = evaluate_value(ctx, &type_cast.inner);
                 let typ = evaluate_type(ctx, &type_cast.typ);
@@ -259,11 +260,21 @@ impl IrGen for BinaryExpression {
     fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
         let left = evaluate_value(ctx, &self.left);
         let right = evaluate_value(ctx, &self.right); // TODO: cast type for binary operator
+        println!("{:?}", self);
         match self.op {
-            BinaryOperation::Plus => Some((llvm_add(ctx, left, right), std::ptr::null_mut())),
-            BinaryOperation::Minus => Some((llvm_sub(ctx, left, right), std::ptr::null_mut())),
-            BinaryOperation::Mul => Some((llvm_mul(ctx, left, right), std::ptr::null_mut())),
-            BinaryOperation::Div => Some((llvm_div(ctx, left, right), std::ptr::null_mut())),
+            BinaryOperator::Plus => Some((llvm_add(ctx, left, right), std::ptr::null_mut())),
+            BinaryOperator::Minus => Some((llvm_sub(ctx, left, right), std::ptr::null_mut())),
+            BinaryOperator::Mul => Some((llvm_mul(ctx, left, right), std::ptr::null_mut())),
+            BinaryOperator::Div => Some((llvm_div(ctx, left, right), std::ptr::null_mut())),
+            BinaryOperator::Dot => {
+                let ptr = unsafe {LLVMBuildAlloca(ctx.builder, LLVMTypeOf(left), into_raw_str!("alloctmp"))};
+                unsafe {LLVMBuildStore(ctx.builder, left, ptr)};
+                let right = match *self.right {Expression::MonadicExpression(MonadicExpression::Const(num)) => num, _ => unreachable!()};
+                let ret = unsafe {
+                    LLVMBuildLoad(ctx.builder, llvm_gep(ctx, ptr, right), into_raw_str!("loadtmp"))
+                };
+                Some((ret, std::ptr::null_mut()))
+            }
         }
     }
 }
@@ -358,12 +369,9 @@ impl Compile for Program {
             let engine = JITEngine::new(&ctx);
 
             let addr = engine.get_func("Brighter");
-            let f: extern "C" fn(i64, i64) -> i64 = std::mem::transmute(addr);
+            let f: extern "C" fn(u32, u32, u8, u8, u8) -> i64 = std::mem::transmute(addr);
 
-            let x = 1;
-            let y = 1;
-            let res = f(x, y);
-            println!("{} {} {}", x, y, res);
+            println!("1 1 0 0 1 {}", f(1, 1, 0, 0, 1));
             engine.drop();
             ctx.drop();
         }
