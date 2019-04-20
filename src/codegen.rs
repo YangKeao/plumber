@@ -15,14 +15,36 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
 
+#[derive(Hash, Eq, PartialEq, Clone)]
+pub struct Ident {
+    name: String,
+    typ: IdentType
+}
+
+#[derive(Hash, Eq, PartialEq, Clone)]
+pub enum IdentType {
+    Function,
+    Variable,
+    Struct
+}
+
+impl Ident {
+    fn new(name: String, typ: IdentType) -> Ident {
+        Ident {
+            name,
+            typ,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct CompileContext {
     pub llvm_ctx: *mut LLVMContext,
     pub module: *mut LLVMModule,
     pub fpm: *mut LLVMPassManager,
     pub builder: *mut LLVMBuilder,
-    pub value_map: Arc<RefCell<HashMap<String, LLVMValueRef>>>,
-    pub typ_map: Arc<RefCell<HashMap<String, LLVMTypeRef>>>,
+    pub value_map: Arc<RefCell<HashMap<Ident, LLVMValueRef>>>,
+    pub typ_map: Arc<RefCell<HashMap<Ident, LLVMTypeRef>>>,
 }
 
 impl CompileContext {
@@ -106,9 +128,34 @@ impl IrGen for StructDefinition {
         let typ = unsafe {
             LLVMStructTypeInContext(ctx.llvm_ctx, fields.as_mut_ptr(), fields.len() as u32, 0)
         };
+
+        let function_type = unsafe {llvm::core::LLVMFunctionType(
+            typ,
+            fields.as_mut_ptr(),
+            self.fields.len() as u32,
+            0,
+        )};
+        let function = unsafe {
+            llvm::core::LLVMAddFunction(ctx.module, into_raw_str!(self.name.get_name()), function_type)
+        };
+        let block = unsafe {llvm::core::LLVMAppendBasicBlockInContext(
+            ctx.llvm_ctx,
+            function,
+            into_raw_str!("entry"),
+        )};
+        unsafe {llvm::core::LLVMPositionBuilderAtEnd(ctx.builder, block)};
+        let ptr = unsafe {LLVMBuildAlloca(ctx.builder, typ, into_raw_str!("tmpalloca"))};
+        for i in 0..fields.len() {
+            unsafe {
+                let field = LLVMBuildStructGEP(ctx.builder, ptr, i as u32, into_raw_str!("tmpgep"));
+                LLVMBuildStore(ctx.builder, LLVMGetParam(function, i as u32), field);
+            }
+        }
+        unsafe {LLVMBuildRet(ctx.builder, LLVMBuildLoad(ctx.builder, ptr, into_raw_str!("tmpload")))};
+
         ctx.typ_map
             .borrow_mut()
-            .insert(self.name.get_name().to_string(), typ);
+            .insert(Ident::new(self.name.get_name().to_string(), IdentType::Struct), typ);
         Some((std::ptr::null_mut(), typ))
     }
 }
@@ -128,10 +175,60 @@ impl IrGen for Typ {
                 std::ptr::null_mut(),
                 *ctx.typ_map
                     .borrow_mut()
-                    .get(&st.get_name().to_string())
+                    .get(&Ident::new(st.get_name().to_string(), IdentType::Struct))
                     .unwrap(),
             )),
         }
+    }
+}
+
+impl IrGen for FunctionCall {
+    fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
+        let function = unsafe {
+            LLVMGetNamedFunction(
+                ctx.module,
+                into_raw_str!(self.function_name.get_name()),
+            )
+        };
+        let function_typ = *ctx
+            .typ_map
+            .borrow_mut()
+            .get(&Ident::new(self.function_name.get_name().to_string(), IdentType::Function))
+            .unwrap();
+
+        let params_size = unsafe { LLVMCountParamTypes(function_typ) as usize };
+        let mut params = vec![std::ptr::null_mut(); params_size];
+        unsafe { LLVMGetParamTypes(function_typ, params.as_mut_ptr()) }
+
+        let mut args: Vec<_> = self
+            .args
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let expr = evaluate_value::<Expression, _>(ctx, item);
+                llvm_cast_int(ctx, expr, params[index])
+            })
+            .collect();
+        Some((
+            unsafe {
+                // TODO: set LLVMBuildCall Name
+                LLVMBuildCall(
+                    ctx.builder,
+                    function,
+                    args.as_mut_ptr(),
+                    args.len() as u32,
+                    into_raw_str!("tmpcall"),
+                )
+            },
+            unsafe {
+                LLVMGetReturnType(
+                    *ctx.typ_map
+                        .borrow_mut()
+                        .get(&Ident::new(self.function_name.get_name().to_string(), IdentType::Function))
+                        .unwrap(),
+                )
+            },
+        ))
     }
 }
 
@@ -139,54 +236,10 @@ impl IrGen for MonadicExpression {
     fn build(&self, ctx: &CompileContext) -> Option<(LLVMValueRef, LLVMTypeRef)> {
         match self {
             MonadicExpression::FunctionCall(fun_call) => {
-                let function = unsafe {
-                    LLVMGetNamedFunction(
-                        ctx.module,
-                        into_raw_str!(fun_call.function_name.get_name()),
-                    )
-                };
-                let function_typ = *ctx
-                    .typ_map
-                    .borrow_mut()
-                    .get(&fun_call.function_name.get_name().to_string())
-                    .unwrap();
-
-                let params_size = unsafe { LLVMCountParamTypes(function_typ) as usize };
-                let mut params = vec![std::ptr::null_mut(); params_size];
-                unsafe { LLVMGetParamTypes(function_typ, params.as_mut_ptr()) }
-
-                let mut args: Vec<_> = fun_call
-                    .args
-                    .iter()
-                    .enumerate()
-                    .map(|(index, item)| {
-                        let expr = evaluate_value::<Expression, _>(ctx, item);
-                        llvm_cast_int(ctx, expr, params[index])
-                    })
-                    .collect();
-                Some((
-                    unsafe {
-                        // TODO: set LLVMBuildCall Name
-                        LLVMBuildCall(
-                            ctx.builder,
-                            function,
-                            args.as_mut_ptr(),
-                            args.len() as u32,
-                            into_raw_str!(fun_call.function_name.get_name()),
-                        )
-                    },
-                    unsafe {
-                        LLVMGetReturnType(
-                            *ctx.typ_map
-                                .borrow_mut()
-                                .get(fun_call.function_name.get_name())
-                                .unwrap(),
-                        )
-                    },
-                ))
+                fun_call.build(ctx)
             }
             MonadicExpression::Variable(var) => Some((
-                *ctx.value_map.borrow_mut().get(var.get_name()).unwrap(),
+                *ctx.value_map.borrow_mut().get(&Ident::new(var.get_name().to_string(), IdentType::Variable)).unwrap(),
                 std::ptr::null_mut(),
             )), // TODO: Add Type for value
             MonadicExpression::Const(num) => Some((
@@ -243,7 +296,7 @@ impl IrGen for FunDefinition {
 
             ctx.typ_map
                 .borrow_mut()
-                .insert(self.name.to_string(), function_type);
+                .insert(Ident::new(self.name.to_string(), IdentType::Function), function_type);
 
             let function =
                 llvm::core::LLVMAddFunction(ctx.module, into_raw_str!(self.name), function_type);
@@ -257,21 +310,21 @@ impl IrGen for FunDefinition {
 
             let mut bind_map = ctx.value_map.borrow_mut().clone();
             for (index, var) in self.args.iter().enumerate() {
-                bind_map.insert(var.name.clone(), LLVMGetParam(function, index as u32));
+                bind_map.insert(Ident::new(var.name.clone(), IdentType::Variable), LLVMGetParam(function, index as u32));
             }
 
             let mut ctx = ctx.clone();
             ctx.value_map = Arc::new(RefCell::new(bind_map));
             self.bindings.iter().for_each(|bind| {
                 let value = bind.value.build(&ctx).unwrap().0;
-                let value = llvm_cast_int(&ctx, value, bind.var.typ.build(&ctx).unwrap().1);
+                let value = llvm_cast_int(&ctx, value, bind.var.typ.build(&ctx).unwrap().1); // TODO: Cast not only Int
                 ctx.value_map
                     .borrow_mut()
-                    .insert(bind.var.name.clone(), value);
+                    .insert(Ident::new(bind.var.name.clone(), IdentType::Variable), value);
             });
             let ret_value = self.expr.build(&ctx).unwrap().0;
-            let ret_value = llvm_cast_int(&ctx, ret_value, ret_typ);
-            llvm::core::LLVMBuildRet(ctx.builder, ret_value);
+            let ret_value = llvm_cast_int(&ctx, ret_value, ret_typ); // TODO: Cast not only Int
+            LLVMBuildRet(ctx.builder, ret_value);
 
             LLVMRunFunctionPassManager(ctx.fpm, function);
             Some((function, function_type))

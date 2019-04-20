@@ -1,0 +1,4 @@
+struct Color (u8,u8,u8)
+
+extern let simple_image x:u32 y:u32 c:Color -> c:Color =
+    Color(x, y, 0)
